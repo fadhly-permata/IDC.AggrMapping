@@ -1,0 +1,271 @@
+{
+    // Nama applikasi, digunakan untuk menampilkan nama applikasi di Swagger UI
+    "AppName": "IDC.AggrMapping",
+    // Bahasa yang digunakan untuk menampilkan pesan. Opsi: en, id
+    "Language": "en",
+    // Pengaturan logging
+    "Logging": {
+        // Pengaturan level logging
+        "LogLevel": {
+            // Level logging default, opsi: Information, Warning, Error
+            "Default": "Information",
+            // Level logging untuk Microsoft.AspNetCore, opsi: Information, Warning, Error, Trace, Debug
+            "Microsoft.AspNetCore": "Warning"
+        },
+        // Pasangkan logging ke objek DI 
+        // PROPERTI INI SUDAH DEPRECATED
+        "RegisterAsDI": true,
+        // Lampirkan stack trace ke log exception
+        "IncludeStackTrace": true,
+        // Aktifkan logging ke OS
+        "LogToOS": true,
+        // Aktifkan logging ke file
+        "LogToFile": true,
+        // Aktifkan penghapusan otomatis log lama
+        "AutoCleanup": true,
+        // Maksimum usia log lama sebelum dihapus (dalam satuan hari)
+        "MaxAge": 30,
+        // Direktori dasar untuk penyimpanan log
+        // bila kosong maka akan menggunakan Directory.GetCurrentDirectory()
+        "BaseDirectory": "",
+        // Direktori untuk menyimpan log
+        "LogDirectory": "/wwwroot/logs/"
+    },
+    // Pengaturan Dependency Injection
+    "DependencyInjection": {
+        // Aktifkan caching
+        "Caching": {
+            // Aktifkan caching
+            "Enable": true,
+            // Waktu kadaluarsa cache dalam satuan menit
+            "ExpirationInMinutes": 5
+        },
+        // Aktifkan SQLite
+        "SQLite": true,
+        // Aktifkan MongoDB
+        "MongoDB": false,
+        // Aktifkan PostgreSQL
+        "PGSQL": false
+    },
+    // Pengaturan Middlewares
+    "Middlewares": {
+        "APIKey": {
+            // Aktifkan middleware autentikasi API key
+            "Enabled": true,
+            "EndPointManager": {
+                // Daftar endpoint yang tidak akan di proses menggunakan API key
+                "Exclude": [
+                    "/swagger/",
+                    "/css",
+                    "/js",
+                    "/themes",
+                    "/images",
+                    "/logs",
+                    "/health"
+                ],
+                // Daftar endpoint yang akan di proses menggunakan API key.
+                // Biarkan array tetap kosong [] untuk membatasi semua endpoint. 
+                // Terkecuali untuk endpoint yang disebutkan di "Exclude"
+                "Include": []
+            }
+        },
+        // Aktifkan middleware autentikasi API key
+        // PROPERTI INI AKAN DI DEPRECATED
+        "ApiKeyAuthentication": true,
+        // Aktifkan middleware request logging
+        "RequestLogging": true,
+        // Aktifkan middleware response compression
+        "ResponseCompression": true,
+        // Aktifkan middleware rate limiting
+        "RateLimiting": {
+            // Aktifkan rate limiting
+            "Enabled": true,
+            // Maksimum jumlah request per menit
+            "MaxRequests": 100,
+            // Disable rate limiting untuk endpoint tertentu
+            "EndPointManager": {
+                // Daftar endpoint yang tidak akan dibatasi jumlah hit-nya
+                "Exclude": [
+                    "/swagger/",
+                    "/css",
+                    "/js",
+                    "/themes",
+                    "/images",
+                    "/logs",
+                    "/health"
+                ],
+                // Daftar endpoint yang akan dibatasi jumlah hit-nya.
+                // Biarkan array tetap kosong [] untuk membatasi semua endpoint. 
+                // Terkecuali untuk endpoint yang disebutkan di "Exclude"
+                "Include": []
+            }
+        },
+        // Aktifkan middleware security headers
+        "AdditionalHeader": {
+            // Aktifkan middleware security headers
+            "Enabled": true,
+            // Aktifkan middleware security headers untuk HTTP
+            "EnableForHttp": true,
+            // Aktifkan middleware security headers untuk HTTPS
+            "EnableForHttps": true,
+            // Aktifkan middleware security headers untuk semua endpoint
+            "EnableForAllEndpoints": true,
+            // Opsi tambahan untuk middleware security headers
+            "HeaderItems": {
+                // Cegah clickjacking attacks: Browser tidak boleh menampilkan halaman atau API dalam <iframe>, <embed>, atau <object>
+                // MDN Web Docs: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
+                "X-Frame-Options": "DENY",
+                // Cegah MIME type sniffing: Browser harus mematuhi Content-Type header yang dikirim server, tidak menebak tipe konten
+                // MDN Web Docs: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options
+                "X-Content-Type-Options": "nosniff",
+                // Aktifkan built-in XSS protection di browser lama, Jika terdeteksi XSS, browser akan memblokir rendering halaman
+                // Catatan: Sudah deprecated di browser modern (diganti Content-Security-Policy)
+                // MDN Web Docs: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection
+                "X-XSS-Protection": "1; mode=block",
+                // cegah code injection: Hanya ijinkan resource dari domain sendiri ('self')
+                // Tidak boleh load script, CSS, gambar dari external domain
+                // MDN Web Docs: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy
+                // W3C Spec: https://www.w3.org/TR/CSP3/
+                "Content-Security-Policy": "default-src 'self'; connect-src 'self' ws://localhost:*; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';",
+                // Kontrol informasi referrer yang dikirim ke situs lain
+                // MDN Web Docs: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy
+                // W3C Spec: https://w3c.github.io/webappsec-referrer-policy/
+                "Referrer-Policy": "strict-origin-when-cross-origin",
+                // Kontrol browser features yang bisa diakses
+                // geolocation=(): Tidak mengizinkan akses GPS/lokasi
+                // camera=(): Tidak mengizinkan akses kamera
+                // Keamanan: Mencegah akses tidak sah ke hardware device
+                // MDN Web Docs: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy
+                // W3C Spec: https://w3c.github.io/webappsec-permissions-policy/
+                // Google Developers: https://developer.chrome.com/docs/privacy-sandbox/permissions-policy/
+                "Permissions-Policy": "geolocation=(), camera=()"
+            }
+        },
+        "Cors": {
+            // Aktifkan CORS
+            "Enabled": true,
+            // Host yang diizinkan untuk mengakses API
+            "AllowedHosts": [
+                "http://localhost",
+                "https://localhost",
+                "http://localhost:*",
+                "https://localhost:*"
+            ],
+            // Header yang diizinkan untuk dikirim ke API. 
+            // Opsi: Authorization, Content-Type, Accept, Origin, X-Requested-With, DLL
+            "AllowedHeaders": [
+                "X-API-Key",
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "Origin",
+                "X-Requested-With"
+            ],
+            // Metode HTTP yang diizinkan untuk mengakses API. Opsi: GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, DLL
+            "AllowedMethods": [
+                "GET",
+                "POST",
+                "PUT",
+                "DELETE",
+                "OPTIONS",
+                "HEAD",
+                "PATCH",
+                "TRACE",
+                "CONNECT"
+            ],
+            "EndPointManager": {
+                // Daftar endpoint yang akan diproses melalui CORS
+                "Exclude": [],
+                // Daftar endpoint yang tidak akan diproses melalui CORS
+                "Include": [
+                    "/swagger/",
+                    "/css",
+                    "/js",
+                    "/themes",
+                    "/images",
+                    "/logs",
+                    "/health"
+                ]
+            }
+        }
+    },
+    // Pengaturan Plugins
+    "Plugins": {
+        // Aktifkan plugins
+        "Enable": true,
+        // Direktori dasar untuk penyimpanan plugins
+        // bila kosong maka akan menggunakan Directory.GetCurrentDirectory()
+        "BaseDirectory": "",
+        // Direktori sumber plugins
+        "SourceDirectory": "wwwroot/plugins/source/",
+        // Plugins yang diaktifkan, gunakan nama file tanpa ekstensi & "Plugin".
+        // Misal: "HelloWorldPlugin.cs" -> "HelloWorld"
+        // Untuk mengaktifkan semua plugins, gunakan value [ "All" ]
+        "EnabledPlugins": [
+            "HelloWorld",
+            "CallOther",
+            "HitungLuasSegitiga"
+        ]
+    },
+    // Pengaturan keamanan
+    "Security": {
+        // Daftar API key yang terdaftar
+        // PROPERTI INI AKAN DI DEPRECATED
+        // Saat ini disimpan di file sebagai data dummy, next version akan dihapus dan diganti ke database
+        "RegisteredApiKeyList": [
+            "NFHUZqt0zmL6siZ7/ynQ8nljJtsQrT3h0+nQZHhIQhk=",
+            "IDxvX6aT3XTERRpuHpMNtpcQVUo2rZ3Smtm83UPVfi8="
+        ]
+    },
+    // Pengaturan Swagger
+    "SwaggerConfig": {
+        // Pengaturan UI Swagger
+        "UI": {
+            // Aktifkan Swagger UI
+            "Enable": true,
+            // Urutkan endpoint berdasarkan nama
+            "SortEndpoints": true,
+            // Tema Swagger UI
+            "Theme": "/themes/theme-monokai-dark.css"
+        },
+        // Pengaturan OpenAPI
+        "OpenApiInfo": {
+            // Informasi OpenAPI
+            "Title": "API - IDC.AggrMapping",
+            // Versi OpenAPI
+            "Version": "v2",
+            // Deskripsi OpenAPI
+            "Description": "API documentation for Backend Template",
+            // Syarat dan ketentuan OpenAPI
+            "TermsOfService": "/openapi/terms.html",
+            // Kontak OpenAPI
+            "Contact": {
+                // Nama kontak OpenAPI
+                "Name": "Contact Support",
+                // Email kontak OpenAPI
+                "Email": "fadhly.permata@idxpartners.com",
+                // URL kontak OpenAPI
+                "Url": "https://idxpartners.com/contact-us/"
+            },
+            // Lisensi OpenAPI
+            "License": {
+                // Nama lisensi OpenAPI
+                "Name": "Proprietary License",
+                // URL lisensi OpenAPI
+                "Url": "/openapi/license.html"
+            }
+        },
+        // Path yang akan dikecualikan dari dokumentasi Swagger
+        "ExcludedPaths": [
+            "api/Mongo/"
+        ],
+        "AdditionalFiles": {
+            "css": [
+                "/css/swagger-custom.css"
+            ],
+            "js": [
+                "/js/swagger-theme-switcher.js"
+            ]
+        }
+    }
+}

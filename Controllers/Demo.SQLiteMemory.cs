@@ -1,0 +1,337 @@
+using IDC.AggrMapping.Utilities;
+using IDC.AggrMapping.Utilities.Models.SQLite;
+using IDC.Utilities;
+using IDC.Utilities.Data;
+using IDC.Utilities.Models.API;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json.Linq;
+
+namespace IDC.AggrMapping.Controllers;
+
+/// <summary>
+/// Controller for managing SQLite in-memory database operations
+/// </summary>
+/// <remarks>
+/// Provides endpoints for creating, altering, and managing SQLite tables in memory.
+/// Supports operations like creating tables, adding/removing columns, and querying table information.
+/// </remarks>
+/// <example>
+/// Basic usage:
+/// <code>
+/// var controller = new DemoControllerSQLiteMemory(
+///     appConfigs: new AppConfigsHandler(),
+///     language: new Language(),
+///     systemLogging: new SystemLogging(),
+///     sqliteHelper: new SQLiteHelper("Data Source=:memory:")
+/// );
+/// </code>
+/// </example>
+/// <param name="language">Service for handling language and localization</param>
+/// <param name="systemLogging">Service for system-wide logging operations</param>
+/// <param name="sqliteHelper">Optional SQLite helper for database operations</param>
+[Route("api/demo/[controller]")]
+[ApiController]
+[ApiExplorerSettings(GroupName = "Demo")]
+public class DemoSQLiteMemory(
+    Language language,
+    SystemLogging systemLogging,
+    SQLiteHelper? sqliteHelper = null
+) : ControllerBase
+{
+    private const string CON_API_STATUS_FAILED = "api.status.failed";
+
+    /// <summary>
+    /// Creates a new SQLite table with specified columns
+    /// </summary>
+    /// <remarks>
+    /// Creates a table in SQLite database with the given name and column definitions.
+    /// Each column is defined by a key-value pair where key is the column name and value is the column type/definition.
+    ///
+    /// Example request body:
+    /// {
+    ///   "tableName": "users",
+    ///   "columns": {
+    ///     "id": "INTEGER PRIMARY KEY",
+    ///     "name": "TEXT NOT NULL",
+    ///     "email": "TEXT UNIQUE"
+    ///   }
+    /// }
+    /// </remarks>
+    /// <param name="request">Request object containing table name and column definitions</param>
+    /// <returns>APIResponseData containing affected rows count</returns>W
+    /// <exception cref="Exception">Thrown when table creation fails</exception>
+    [Tags(tags: "SQLite In Memory"), HttpPost(template: "Tables")]
+    public APIResponseData<object> CreateTable([FromBody] CreateTableRequest request)
+    {
+        try
+        {
+            sqliteHelper!
+                .Connect()
+                .ExecuteNonQuery(
+                    query: $"CREATE TABLE IF NOT EXISTS {request.TableName} ({(string.Join(separator: ", ", values: request.Columns.Select(selector: col => $"{col.Key} {col.Value}")))})",
+                    affectedRows: out int affectedRows
+                );
+
+            return new APIResponseData<object>()
+                .ChangeMessage(language: language, key: "api.ddl.table_created")
+                .ChangeData(data: new { affectedRows });
+        }
+        catch (Exception ex)
+        {
+            return new APIResponseData<object>()
+                .ChangeStatus(language: language, key: CON_API_STATUS_FAILED)
+                .ChangeMessage(
+                    exception: ex,
+                    logging: systemLogging,
+                    includeStackTrace: Commons.IS_DEBUG_MODE
+                );
+        }
+    }
+
+    /// <summary>
+    /// Alters a SQLite table by adding or removing columns
+    /// </summary>
+    /// <remarks>
+    /// Modifies an existing table by adding new columns or removing existing ones.
+    ///
+    /// Example request body:
+    /// {
+    ///   "columnsToAdd": {
+    ///     "age": "INTEGER",
+    ///     "address": "TEXT"
+    ///   },
+    ///   "columnsToRemove": [
+    ///     "old_column"
+    ///   ]
+    /// }
+    /// </remarks>
+    /// <param name="tableName">Name of the table to alter</param>
+    /// <param name="request">Request object containing columns to add and remove</param>
+    /// <returns>APIResponseData containing affected rows count</returns>
+    /// <exception cref="Exception">Thrown when table alteration fails</exception>
+    [Tags(tags: "SQLite In Memory"), HttpPut(template: "Tables/{tableName}")]
+    public APIResponseData<object> AlterTable(
+        [FromRoute] string tableName,
+        [FromBody] AlterTableRequest request
+    )
+    {
+        try
+        {
+            var queries = new List<string>();
+
+            if ((request.ColumnsToAdd?.Count ?? 0) > 0)
+            {
+                queries.AddRange(
+                    (request.ColumnsToAdd ?? []).Select(selector: col =>
+                        $"ALTER TABLE {tableName} ADD COLUMN {col.Key} {col.Value}"
+                    )
+                );
+            }
+
+            if ((request.ColumnsToRemove?.Count ?? 0) > 0)
+            {
+                queries.AddRange(
+                    (request.ColumnsToRemove ?? []).Select(selector: col =>
+                        $"ALTER TABLE {tableName} DROP COLUMN {col}"
+                    )
+                );
+            }
+
+            if (queries.Count > 0)
+            {
+                sqliteHelper!
+                    .Connect()
+                    .ExecuteNonQuery(
+                        query: string.Join(separator: "; ", values: queries),
+                        affectedRows: out int affectedRows
+                    );
+
+                return new APIResponseData<object>()
+                    .ChangeMessage(language: language, key: "api.ddl.table_altered")
+                    .ChangeData(data: new { affectedRows });
+            }
+
+            return new APIResponseData<object>()
+                .ChangeStatus(language: language, key: CON_API_STATUS_FAILED)
+                .ChangeMessage(language: language, key: "api.ddl.no_columns_specified");
+        }
+        catch (Exception ex)
+        {
+            return new APIResponseData<object>()
+                .ChangeStatus(language: language, key: CON_API_STATUS_FAILED)
+                .ChangeMessage(
+                    exception: ex,
+                    logging: systemLogging,
+                    includeStackTrace: Commons.IS_DEBUG_MODE
+                );
+        }
+    }
+
+    /// <summary>
+    /// Drops a SQLite table if it exists
+    /// </summary>
+    /// <remarks>
+    /// Removes the specified table from the SQLite database.
+    /// Uses IF EXISTS clause to prevent errors if table doesn't exist.
+    /// Returns affected rows count in the response data.
+    /// </remarks>
+    /// <param name="tableName">Name of the table to drop</param>
+    /// <returns>APIResponseData containing affected rows count</returns>
+    /// <exception cref="Exception">Thrown when table drop operation fails</exception>
+    [Tags(tags: "SQLite In Memory"), HttpDelete(template: "Tables/{tableName}")]
+    public APIResponseData<object> DropTable([FromRoute] string tableName)
+    {
+        try
+        {
+            sqliteHelper!
+                .Connect()
+                .ExecuteNonQuery(
+                    query: $"DROP TABLE IF EXISTS {tableName}",
+                    affectedRows: out int affectedRows
+                );
+
+            return new APIResponseData<object>()
+                .ChangeMessage(language: language, key: "api.ddl.table_dropped")
+                .ChangeData(data: new { affectedRows });
+        }
+        catch (Exception ex)
+        {
+            return new APIResponseData<object>()
+                .ChangeStatus(language: language, key: CON_API_STATUS_FAILED)
+                .ChangeMessage(
+                    exception: ex,
+                    logging: systemLogging,
+                    includeStackTrace: Commons.IS_DEBUG_MODE
+                );
+        }
+    }
+
+    /// <summary>
+    /// Gets all tables in the SQLite database
+    /// </summary>
+    /// <remarks>
+    /// Retrieves a list of all user tables in the database along with their column definitions.
+    /// System tables (starting with 'sqlite_') are excluded from the results.
+    ///
+    /// Example response:
+    /// {
+    ///   "data": [
+    ///     {
+    ///       "tableName": "users",
+    ///       "columns": [
+    ///         {
+    ///           "name": "id",
+    ///           "type": "INTEGER",
+    ///           "notNull": true,
+    ///           "defaultValue": null,
+    ///           "isPrimaryKey": true
+    ///         }
+    ///       ]
+    ///     }
+    ///   ]
+    /// }
+    /// </remarks>
+    /// <returns>APIResponseData containing list of tables with their column definitions</returns>
+    /// <exception cref="Exception">Thrown when table information cannot be retrieved</exception>
+    [Tags(tags: "SQLite In Memory"), HttpGet(template: "Tables")]
+    public APIResponseData<object> GetAllTables()
+    {
+        try
+        {
+            sqliteHelper!
+                .Connect()
+                .ExecuteQuery(
+                    query: "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+                    results: out List<JObject> tables
+                );
+
+            return new APIResponseData<object>()
+                .ChangeMessage(language: language, key: "api.ddl.table_retrieved")
+                .ChangeData(
+                    data: tables
+                        .Select(selector: table =>
+                        {
+                            var tableName = table["name"]?.ToString();
+                            sqliteHelper.ExecuteQuery(
+                                query: $"PRAGMA table_info({tableName})",
+                                results: out List<JObject> columnData
+                            );
+
+                            return new
+                            {
+                                tableName,
+                                columns = columnData.Select(selector: col => new
+                                {
+                                    name = col["name"],
+                                    type = col["type"],
+                                    notNull = col["notnull"],
+                                    defaultValue = col["dflt_value"],
+                                    isPrimaryKey = col["pk"],
+                                }),
+                            };
+                        })
+                        .ToList()
+                );
+        }
+        catch (Exception ex)
+        {
+            return new APIResponseData<object>()
+                .ChangeStatus(language: language, key: CON_API_STATUS_FAILED)
+                .ChangeMessage(
+                    exception: ex,
+                    logging: systemLogging,
+                    includeStackTrace: Commons.IS_DEBUG_MODE
+                );
+        }
+    }
+
+    /// <summary>
+    /// Gets detailed information about a specific table
+    /// </summary>
+    /// <remarks>
+    /// Retrieves column definitions including name, type, constraints and other metadata for the specified table
+    /// </remarks>
+    /// <param name="tableName">Name of the table to get information for</param>
+    /// <returns>Table metadata including column definitions</returns>
+    /// <exception cref="Exception">Thrown when table information cannot be retrieved</exception>
+    [Tags(tags: "SQLite In Memory"), HttpGet(template: "Tables/{tableName}")]
+    public APIResponseData<object> GetTableInfo([FromRoute] string tableName)
+    {
+        try
+        {
+            sqliteHelper!
+                .Connect()
+                .ExecuteQuery(
+                    query: $"PRAGMA table_info({tableName})",
+                    results: out List<JObject> columnData
+                );
+
+            return new APIResponseData<object>()
+                .ChangeMessage(language: language, key: "api.ddl.table_info_retrieved")
+                .ChangeData(
+                    data: new
+                    {
+                        tableName,
+                        columns = columnData.Select(selector: col => new
+                        {
+                            name = col["name"],
+                            type = col["type"],
+                            notNull = col["notnull"],
+                            defaultValue = col["dflt_value"],
+                            isPrimaryKey = col["pk"],
+                        }),
+                    }
+                );
+        }
+        catch (Exception ex)
+        {
+            return new APIResponseData<object>()
+                .ChangeStatus(language: language, key: CON_API_STATUS_FAILED)
+                .ChangeMessage(
+                    exception: ex,
+                    logging: systemLogging,
+                    includeStackTrace: Commons.IS_DEBUG_MODE
+                );
+        }
+    }
+}

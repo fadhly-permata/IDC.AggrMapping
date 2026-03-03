@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Project Sdk="Microsoft.NET.Sdk.Web">
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <!-- Tambahan untuk faster reload -->
+        <!-- <UseSharedCompilation>false</UseSharedCompilation>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies> -->
+    </PropertyGroup>
+    <ItemGroup>
+        <None Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+        <PackageReference Include="Microsoft.CodeAnalysis" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+        <PackageReference Include="Microsoft.Data.Sqlite" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+        <PackageReference Include="Microsoft.Extensions.DependencyModel" />
+        <PackageReference Include="MongoDB.Driver" />
+        <PackageReference Include="Newtonsoft.Json" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+        <PackageReference Include="Swashbuckle.AspNetCore" />
+        <PackageReference Include="CouchbaseNetClient" />
+    </ItemGroup>
+    <ItemGroup>
+        <Reference Include="IDC.Utilities">
+            <HintPath>idc-shr-dependency\IDC.Utilities.dll</HintPath>
+            <!-- Tambahan untuk faster detection -->
+            <!-- <Private>true</Private> -->
+        </Reference>
+    </ItemGroup>
+</Project>

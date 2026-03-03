@@ -1,0 +1,6 @@
+@IDC.AggrMapping_HostAddress = http://localhost:12345
+
+GET {{IDC.AggrMapping_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

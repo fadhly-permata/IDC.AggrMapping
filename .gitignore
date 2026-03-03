@@ -1,0 +1,4 @@
+bin
+obj
+wwwroot/logs/*
+copilot-guidelines.txt
