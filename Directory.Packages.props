@@ -1,20 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
 <Project>
-  <PropertyGroup>
-    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-  </PropertyGroup>
-  <ItemGroup>
-    <!-- Package versions for the entire solution -->
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.1" />
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="8.0.1" />
-    <PackageVersion Include="Microsoft.CodeAnalysis" Version="4.12.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" />
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="8.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyModel" Version="8.0.0" />
-    <PackageVersion Include="MongoDB.Driver" Version="3.3.0" />
-    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.7" />
-    <PackageVersion Include="Swashbuckle.AspNetCore" Version="7.3.1" />
-    <PackageVersion Include="CouchbaseNetClient" Version="3.8.0" />
-  </ItemGroup>
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+    <ItemGroup>
+        <!-- Package versions for the entire solution -->
+        <PackageVersion Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson"
+                        Version="8.0.1" />
+        <PackageVersion Include="Microsoft.AspNetCore.OpenApi"
+                        Version="8.0.1" />
+        <PackageVersion Include="Microsoft.CodeAnalysis"
+                        Version="4.12.0" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp"
+                        Version="4.12.0" />
+        <PackageVersion Include="Microsoft.Data.Sqlite"
+                        Version="8.0.1" />
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions"
+                        Version="8.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.DependencyModel"
+                        Version="8.0.0" />
+        <PackageVersion Include="MongoDB.Driver"
+                        Version="3.3.0" />
+        <PackageVersion Include="Newtonsoft.Json"
+                        Version="13.0.3" />
+        <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL"
+                        Version="5.0.7" />
+        <PackageVersion Include="Swashbuckle.AspNetCore"
+                        Version="7.3.1" />
+        <PackageVersion Include="CouchbaseNetClient"
+                        Version="3.8.0" />
+        <PackageVersion Include="Hangfire.AspNetCore"
+                        Version="1.8.23" />
+        <PackageVersion Include="Hangfire.PostgreSql"
+                        Version="1.21.1" />
+    </ItemGroup>
 </Project>

@@ -26,6 +26,8 @@
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
         <PackageReference Include="Swashbuckle.AspNetCore" />
         <PackageReference Include="CouchbaseNetClient" />
+        <PackageReference Include="Hangfire.AspNetCore" />
+        <PackageReference Include="Hangfire.PostgreSql" />
     </ItemGroup>
     <ItemGroup>
         <Reference Include="IDC.Utilities">

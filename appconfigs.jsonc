@@ -55,7 +55,7 @@
             "EndPointManager": {
                 // Daftar endpoint yang tidak akan di proses menggunakan API key
                 "Exclude": [
-                    "/swagger/",
+                    "/swagger",
                     "/css",
                     "/js",
                     "/themes",
