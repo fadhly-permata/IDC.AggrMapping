@@ -1,8 +1,12 @@
+using Hangfire;
+using Hangfire.PostgreSql;
+using IDC.AggrMapping.Utilities;
 using IDC.Utilities;
 using IDC.Utilities.Data;
 using IDC.Utilities.Extensions;
 using IDC.Utilities.Models.Data;
 using IDC.Utilities.Plugins;
+using IDC.Utilities.Validations;
 using MongoDB.Driver;
 
 namespace IDC.AggrMapping;
@@ -178,28 +182,31 @@ internal partial class Program
                     defaultValue: "ConnectionString_en"
                 );
 
+                var ccs = new CommonConnectionString().FromConnectionString(
+                    connectionString: _appSettings.Get(
+                        path: $"DbContextSettings.{defaultConString}",
+                        defaultValue: "User ID=idc_fadhly;Password={pass};HOST=localhost;Port=5432;Database=idc.en;Pooling=true;MinPoolSize=1;MaxPoolSize=1000;"
+                    )
+                );
+
+                ccs = ccs.ChangePassword(
+                    newPassword: Commons.IS_DEBUG_MODE
+                        ? (ccs.Password ?? string.Empty)
+                        : (
+                            _appSettings.Get<string?>(path: "configPass.passwordDB")
+                            ?? throw new InvalidOperationException(
+                                "Failed to retrieve database password."
+                            )
+                        ).LegacyDecryptor(
+                            key: _appSettings.Get(
+                                path: "KeyConvert.DecryptionKey",
+                                defaultValue: "idxpartners"
+                            )
+                        )
+                );
+
                 return new PostgreHelper(
-                    connectionString: new CommonConnectionString()
-                        .FromConnectionString(
-                            connectionString: _appSettings.Get(
-                                path: $"DbContextSettings.{defaultConString}",
-                                defaultValue: "User ID=idc_fadhly;Password={pass};HOST=localhost;Port=5432;Database=idc.en;Pooling=true;MinPoolSize=1;MaxPoolSize=1000;"
-                            )
-                        )
-                        .ChangePassword(
-                            newPassword: (
-                                _appSettings.Get<string?>(path: "configPass.passwordDB")
-                                ?? throw new InvalidOperationException(
-                                    "Failed to retrieve database password."
-                                )
-                            ).LegacyDecryptor(
-                                _appSettings.Get(
-                                    path: "KeyConvert.DecryptionKey",
-                                    defaultValue: "idxpartners"
-                                )
-                            )
-                        )
-                        .ToPostgreSQL(),
+                    connectionString: ccs.ToPostgreSQL(applicationName: CON_STR_APP_NAME),
                     logging: _appConfigurations.Get(
                         path: "Logging.RegisterAsDI",
                         defaultValue: true
@@ -323,5 +330,65 @@ internal partial class Program
 
                 return new MongoClient(settings).GetDatabase(settings.ApplicationName ?? "IDC_EN");
             });
+    }
+
+    /// <summary>
+    ///     Configures and registers Hangfire service
+    /// </summary>
+    /// <param name="builder">
+    ///     The <see cref="WebApplicationBuilder"/> > instance
+    /// </param>
+    /// <exception cref="InvalidOperationException">
+    ///     Thrown when the database password is not found
+    /// </exception>
+    private static void ConfigureHangfire(WebApplicationBuilder builder)
+    {
+        string defaultConString = _appSettings.Get(
+            path: "DefaultConStrings.IDCAggrMapping.PGSQL",
+            defaultValue: "ConnectionString_en"
+        );
+
+        builder.Services.AddHangfire(config =>
+            config
+                .SetDataCompatibilityLevel(compatibilityLevel: CompatibilityLevel.Version_180)
+                .UseSimpleAssemblyNameTypeSerializer()
+                .UseRecommendedSerializerSettings()
+                .UsePostgreSqlStorage(configure: options =>
+                {
+                    var ccs = new CommonConnectionString().FromConnectionString(
+                        connectionString: _appSettings.Get(
+                            path: $"DbContextSettings.{defaultConString}",
+                            defaultValue: "User ID=idc_fadhly;Password={pass};HOST=localhost;Port=5432;Database=idc.en;Pooling=true;MinPoolSize=1;MaxPoolSize=1000;"
+                        )
+                    );
+
+                    ccs = ccs.ChangePassword(
+                        newPassword: Commons.IS_DEBUG_MODE
+                            ? (ccs.Password ?? string.Empty)
+                            : (
+                                _appSettings.Get<string?>(path: "configPass.passwordDB")
+                                ?? throw new InvalidOperationException(
+                                    "Failed to retrieve database password."
+                                )
+                            ).LegacyDecryptor(
+                                key: _appSettings.Get(
+                                    path: "KeyConvert.DecryptionKey",
+                                    defaultValue: "idxpartners"
+                                )
+                            )
+                    );
+
+                    options.UseNpgsqlConnection(
+                        connectionString: ccs.ToPostgreSQL(applicationName: CON_STR_APP_NAME)
+                    );
+                })
+        );
+
+        // Register Hangfire Server
+        builder.Services.AddHangfireServer(optionsAction: options =>
+        {
+            options.WorkerCount = Environment.ProcessorCount * 5;
+            options.Queues = ["high_priority", "default", "low_priority"];
+        });
     }
 }

@@ -8,13 +8,17 @@ public static class Commons
     /// <summary>
     /// Indicates whether the application is running in debug mode.
     /// </summary>
-    internal const bool IS_DEBUG_MODE =
+    internal static bool IS_DEBUG_MODE
+    {
+        get
+        {
 #if DEBUG
-        true
+            return true;
 #else
-        false
+            return false;
 #endif
-    ;
+        }
+    }
 
     /// <summary>
     /// Returns a string representation of the duration between two timestamps.

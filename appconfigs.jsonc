@@ -45,13 +45,13 @@
         // Aktifkan MongoDB
         "MongoDB": false,
         // Aktifkan PostgreSQL
-        "PGSQL": false
+        "PGSQL": true
     },
     // Pengaturan Middlewares
     "Middlewares": {
         "APIKey": {
             // Aktifkan middleware autentikasi API key
-            "Enabled": true,
+            "Enabled": false,
             "EndPointManager": {
                 // Daftar endpoint yang tidak akan di proses menggunakan API key
                 "Exclude": [
@@ -61,7 +61,8 @@
                     "/themes",
                     "/images",
                     "/logs",
-                    "/health"
+                    "/health",
+                    "/hangfire"
                 ],
                 // Daftar endpoint yang akan di proses menggunakan API key.
                 // Biarkan array tetap kosong [] untuk membatasi semua endpoint. 
@@ -86,13 +87,14 @@
             "EndPointManager": {
                 // Daftar endpoint yang tidak akan dibatasi jumlah hit-nya
                 "Exclude": [
-                    "/swagger/",
+                    "/swagger",
                     "/css",
                     "/js",
                     "/themes",
                     "/images",
                     "/logs",
-                    "/health"
+                    "/health",
+                    "/hangfire"
                 ],
                 // Daftar endpoint yang akan dibatasi jumlah hit-nya.
                 // Biarkan array tetap kosong [] untuk membatasi semua endpoint. 

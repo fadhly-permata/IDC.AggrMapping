@@ -1,3 +1,6 @@
+using Hangfire;
+using Hangfire.Dashboard;
+using IDC.AggrMapping.Utilities;
 using IDC.Utilities;
 using IDC.Utilities.Comm.Http;
 using IDC.Utilities.Extensions;
@@ -82,6 +85,7 @@ internal static partial class Program
         ConfigureSQLite(builder: builder);
         ConfigureMongoDB(builder: builder);
         ConfigurePlugins(builder: builder, systemLogging: _systemLogging);
+        ConfigureHangfire(builder: builder);
 
         var app = builder.Build();
         ConfigureMiddlewares(app: app);
@@ -89,7 +93,32 @@ internal static partial class Program
         if (_appConfigurations.Get<bool>(path: "Middlewares.Cors.Enabled"))
             app.UseCors(policyName: $"{CON_STR_APP_NAME}-CorsPolicy");
 
+        app.UseHangfireDashboard(
+            "/hangfire",
+            new DashboardOptions
+            {
+                Authorization = [new HangfireDashboardAuthorizationFilter()],
+                DashboardTitle = "Background Job Dashboard",
+            }
+        );
+
         app.Run();
+    }
+
+    // Filter untuk otorisasi dashboard
+    public class HangfireDashboardAuthorizationFilter : IDashboardAuthorizationFilter
+    {
+        public bool Authorize(DashboardContext context)
+        {
+            var httpContext = context.GetHttpContext();
+
+            // Allow di development
+            if (Commons.IS_DEBUG_MODE)
+                return true;
+
+            // Di production, cek API key sederhana
+            return httpContext.Request.Headers["X-Hangfire-Key"] == "your-secret-key-here";
+        }
     }
 
     private static void ConfigureAppConfigurations(WebApplicationBuilder builder)
