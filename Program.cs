@@ -94,7 +94,7 @@ internal static partial class Program
             app.UseCors(policyName: $"{CON_STR_APP_NAME}-CorsPolicy");
 
         app.UseHangfireDashboard(
-            "/hangfire",
+            "/hangfire/" + CON_STR_APP_NAME.Replace(oldValue: ".", newValue: ""),
             new DashboardOptions
             {
                 Authorization = [new HangfireDashboardAuthorizationFilter()],

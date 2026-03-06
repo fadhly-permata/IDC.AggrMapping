@@ -90,12 +90,12 @@ public class AppManager(
         try
         {
             var fullPath = SystemLoggingLogic.GetFullLogPath(
-                baseDirectory: (
+                baseDirectory: 
                     appConfigs.Get(
                         path: "Logging.BaseDirectory",
                         defaultValue: Directory.GetCurrentDirectory()
                     )!
-                ).RefinePlatformPath(),
+                .RefinePlatformPath(),
                 logDirectory: appConfigs
                     .Get(path: "Logging.LogDirectory", defaultValue: "logs")!
                     .RefinePlatformPath()

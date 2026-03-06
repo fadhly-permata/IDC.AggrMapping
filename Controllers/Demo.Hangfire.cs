@@ -1,10 +1,7 @@
-using System.Linq.Expressions;
 using Hangfire;
-using Hangfire.States;
 using IDC.Utilities;
 using IDC.Utilities.Data;
 using IDC.Utilities.Models.API;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json.Linq;
 
@@ -19,13 +16,9 @@ namespace IDC.AggrMapping.Controllers;
 /// <param name="pgHelper">
 ///     Service for handling PostgreSQL database operations
 /// </param>
-/// <param name="language">
-///     Service for handling language and localization
-/// </param>
 [Route("AggrMapping/demo/[controller]")]
 [ApiController]
-public class DemoHangfire(SystemLogging systemLogging, PostgreHelper pgHelper, Language language)
-    : ControllerBase
+public class DemoHangfire(SystemLogging systemLogging, PostgreHelper pgHelper) : ControllerBase
 {
     /// <summary>
     ///     Controller for managing PostgreSQL database operations
@@ -63,6 +56,15 @@ public class DemoHangfire(SystemLogging systemLogging, PostgreHelper pgHelper, L
         }
     }
 
+    /// <summary>
+    ///     Enqueues a data processing job
+    /// </summary>
+    /// <param name="dataId">
+    ///     Identifier for the data to process
+    /// </param>
+    /// <returns>
+    ///     APIResponse
+    /// </returns>
     [HttpPost(template: "Queue/EnqueueDataProcessing")]
     public async Task<APIResponse> EnqueueDataProcessing([FromBody] string dataId)
     {
@@ -79,8 +81,23 @@ public class DemoHangfire(SystemLogging systemLogging, PostgreHelper pgHelper, L
         }
     }
 
+    /// <summary>
+    ///     Schedules a data processing job
+    /// </summary>
+    /// <param name="dataId">
+    ///     Identifier for the data to process
+    /// </param>
+    /// <param name="delayInSecond">
+    ///     Delay before processing
+    /// </param>
+    /// <returns>
+    ///     APIResponse
+    /// </returns>
     [HttpPost(template: "Queue/ScheduleDataProcessing")]
-    public async Task<APIResponse> ScheduleDataProcessing([FromBody] string dataId, int delayInSecond)
+    public async Task<APIResponse> ScheduleDataProcessing(
+        [FromBody] string dataId,
+        int delayInSecond
+    )
     {
         try
         {

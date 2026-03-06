@@ -1,0 +1,187 @@
+
+INSERT DATA
+=============
+1. penulisan log ke database "idc.log".public.service_log
+2. untuk data konfigurasi ambil dari: 
+    - data_process.map_dtl
+    - data_process.map_hdr
+3. Untuk data hasil map insert data sementara pake cache aja dulu sambil disiapin kalo2 ada kebutuhan migrasi ke teknologi lain.
+
+
+Contoh logging kalo pake file log
+[Info] Processing Insert Data
+- 
+grouped_mappings": [
+    {
+        "destination": {
+            "db_type": "POSTGRES",
+            "db_name": "customer_db",
+            "schema": "public",
+            "table": "customer_profile"
+        },
+        "operation": "UPSERT",
+        "result": [
+            cst_ktp: "",
+            cst_email: "",
+        ]
+    }
+]
+
+
+
+=====================
+
+{
+    "flow_code": "DA01",
+    "confMaptable": [
+        "MAP01",
+        "MAP02"
+    ],
+    "confAggMapCode": "AGG01",
+    "data": [
+        {
+            "installment_type": "equal",
+            "Installment_amortisasi": -1,
+            "grace_periode": 0,
+            "interest_calculation": "Flat",
+            "loan_amount": 10100000,
+            "loan_disbursed": 123456789,
+            "loan_tenor": 12,
+            "loan_date": "2020-01-01",
+            "interest_pct": "0.4166666666666666666666666667",
+            "installment_amount": "883751.00",
+            "loan_interest": "0.4166666666666666666666666667",
+            "dp_paid": "",
+            "first_payment": "",
+            "installment_detail": [
+                {
+                    "period": 1,
+                    "principal_amount": "841667.00",
+                    "interest_amount": "42084.00",
+                    "installment_amount": "883751.00",
+                    "outstanding_amount": "9258333.00"
+                },
+                {
+                    "period": 2,
+                    "principal_amount": "841667.00",
+                    "interest_amount": "42084.00",
+                    "installment_amount": "883751.00",
+                    "outstanding_amount": "8416666.00"
+                },
+                {
+                    "period": 3,
+                    "principal_amount": "841667.00",
+                    "interest_amount": "42084.00",
+                    "installment_amount": "883751.00",
+                    "outstanding_amount": "7574999.00"
+                }
+            ]
+        },
+        {
+            "installment_type": "equal",
+            "Installment_amortisasi": -1,
+            "grace_periode": 0,
+            "interest_calculation": "Flat",
+            "loan_amount": 10100000,
+            "loan_disbursed": 111111111,
+            "loan_tenor": 12,
+            "interest_pct": "0.4166666666666666666666666667",
+            "installment_amount": "883751.00",
+            "loan_interest": "0.4166666666666666666666666667",
+            "dp_paid": "",
+            "first_payment": "",
+            "installment_detail": [
+                {
+                    "period": 1,
+                    "principal_amount": "841667.00",
+                    "interest_amount": "42084.00",
+                    "installment_amount": "883751.00",
+                    "outstanding_amount": "9258333.00"
+                },
+                {
+                    "period": 2,
+                    "principal_amount": "841667.00",
+                    "interest_amount": "42084.00",
+                    "installment_amount": "883751.00",
+                    "outstanding_amount": "8416666.00"
+                },
+                {
+                    "period": 3,
+                    "principal_amount": "841667.00",
+                    "interest_amount": "42084.00",
+                    "installment_amount": "883751.00",
+                    "outstanding_amount": "7574999.00"
+                }
+            ]
+        }
+    ]
+}
+
+
+================
+
+
+"grouped_mappings": [
+    {
+        "destination": {
+            "db_type": "POSTGRES",
+            "db_name": "customer_db",
+            "schema": "public",
+            "table": "customer_profile"
+        },
+        "operation": "UPSERT",
+        "field_mappings": [
+            {
+                "source_field": "cst_ktp",
+                "destination_column": "ktp"
+            },
+            {
+                "source_field": "cst_email",
+                "destination_column": "email",
+            },
+            {
+                "source_field": "cst_birthdate",
+                "destination_column": "birth_date",
+            },
+            {
+                "source_field": "cst_fullname",
+                "destination_column": "full_name",
+            }
+        ]
+    }
+]
+
+
+=====
+
+- MAP01: installment_type, Installment_amortisasi, grace_periode
+- MAP02: interest_calculation, loan_amount, loan_disbursed, loan_tenor
+
+{
+    "flow_code": "DA01",
+    "confMaptable": [
+        "MAP01",
+        "MAP02"
+    ],
+    "confAggMapCode": "AGG01",
+    "data": [
+        {
+            "installment_type": "equal",
+            "Installment_amortisasi": -1,
+            "grace_periode": 0,
+            "interest_calculation": "Flat",
+            "loan_amount": 10100000,
+            "loan_disbursed": 123456789,
+            "loan_tenor": 12
+        },
+        {
+            "installment_type": "equal",
+            "Installment_amortisasi": -1,
+            "grace_periode": 0,
+            "interest_calculation": "Flat",
+            "loan_amount": 10100000,
+            "loan_disbursed": 111111111,
+            "loan_tenor": 12
+        }
+    ]
+}
