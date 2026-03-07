@@ -38,5 +38,6 @@
     </ItemGroup>
     <ItemGroup>
       <Folder Include="Utilities\Attributes\" />
+      <Folder Include="Utilities\Data\" />
     </ItemGroup>
 </Project>

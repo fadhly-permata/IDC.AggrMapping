@@ -1,10 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
-using IDC.AggrMapping.Utilities.Attributes;
 using IDC.Utilities.Interfaces;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using static IDC.AggrMapping.Controllers.InsertDataEngine;
 
 namespace IDC.AggrMapping.Utilities.Models;
 
@@ -55,9 +53,11 @@ public class MlaPayloadModel : BaseModel<MlaPayloadModel>
     /// <summary>
     ///     Validates the MlaPayloadModel according to specified business rules.
     /// </summary>
-    /// <exception cref="ArgumentException">
-    ///     Thrown when validation rules are violated.
-    /// </exception>
+    /// <param name="configs">
+    ///     The configs.
+    /// </param>
+
+
     public void Validate(MlaConfigs configs)
     {
         // Validate FlowCode
@@ -69,13 +69,17 @@ public class MlaPayloadModel : BaseModel<MlaPayloadModel>
             throw new ArgumentException("ConfMaptable cannot be null or empty.");
 
         if (ConfMaptable.Count > configs.MaxMapCount)
-            throw new ArgumentException("ConfMaptable cannot have more than 5 items.");
+            throw new ArgumentException(
+                $"ConfMaptable cannot have more than {configs.MaxMapCount} items."
+            );
 
         // Validate Data array
         if (Data == null || !Data.Any())
             throw new ArgumentException("Data cannot be null or empty.");
 
         if (Data.Count > configs.MaxDataCount)
-            throw new ArgumentException("Data cannot have more than 20 items.");
+            throw new ArgumentException(
+                $"Data cannot have more than {configs.MaxDataCount} items."
+            );
     }
 }

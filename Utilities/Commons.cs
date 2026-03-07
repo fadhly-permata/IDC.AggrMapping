@@ -39,29 +39,25 @@ public static class Commons
 
         if (token.Type == JTokenType.Object)
         {
-            var invalidProperties = ((JObject)token)
+            return !((JObject)token)
                 .Properties()
-                .Where(predicate: property =>
+                .Any(predicate: property =>
                     !ValidateJTokenDepth(
                         token: property.Value,
                         maxDepth: maxDepth,
                         currentDepth: currentDepth + 1
                     )
                 );
-
-            return !invalidProperties.Any();
         }
         else if (token.Type == JTokenType.Array)
         {
-            var invalidItems = ((JArray)token).Where(predicate: item =>
+            return !((JArray)token).Any(predicate: item =>
                 !ValidateJTokenDepth(
                     token: item,
                     maxDepth: maxDepth,
                     currentDepth: currentDepth + 1
                 )
             );
-
-            return !invalidItems.Any();
         }
 
         return true;

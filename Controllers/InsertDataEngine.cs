@@ -1,9 +1,9 @@
-using IDC.AggrMapping.Utilities;
 using IDC.AggrMapping.Utilities.Models;
 using IDC.Utilities;
+using IDC.Utilities.Extensions;
 using IDC.Utilities.Models.API;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ApiExplorer;
+using Newtonsoft.Json.Linq;
 
 namespace IDC.AggrMapping.Controllers;
 
@@ -12,7 +12,11 @@ namespace IDC.AggrMapping.Controllers;
 /// </summary>
 [Route("AggrMapping/[controller]")]
 [ApiController]
-public partial class InsertDataEngine(Caching caching, SystemLogging systemLogging) : ControllerBase
+public partial class InsertDataEngine(
+    Caching caching,
+    SystemLogging systemLogging
+// PostgreHelper pgHelper
+) : ControllerBase
 {
     /// <summary>
     ///     Inserts data into the database
@@ -32,49 +36,34 @@ public partial class InsertDataEngine(Caching caching, SystemLogging systemLoggi
         CancellationToken cancellationToken = default
     )
     {
-        try
-        {
-            var globalConfig = await GetGlobalConfigurations(caching: caching);
+        // var globalConfig = await caching.GetOrSetAsync(
+        //     key: "GlobalConfigurations",
+        //     valueFactory: () =>
+        //         new GlobalConfigurations().InitFromDatabase(
+        //             pgHelper: pgHelper,
+        //             cancellationToken: cancellationToken
+        //         ),
+        //     expirationRenewal: true,
+        //     expirationMinutes: 60
+        // );
 
-            data.Validate(
-                configs: new MlaPayloadModel.MlaConfigs(
-                    MaxMapCount: globalConfig.MaxMapCount,
-                    MaxDataCount: globalConfig.MaxDataPayload
-                )
-            );
+        var globalConfig = new GlobalConfigurationModel();
 
-            return new APIResponseData<object?>().ChangeData(data: null);
-        }
-        catch (Exception ex)
-        {
-            return new APIResponseData<object?>()
-                .ChangeStatus(status: "Failed")
-                .ChangeMessage(
-                    exception: ex,
-                    logging: systemLogging,
-                    includeStackTrace: Commons.IS_DEBUG_MODE
-                );
-        }
+        data.Validate(
+            configs: new MlaPayloadModel.MlaConfigs(
+                MaxMapCount: globalConfig.MaxMapCount,
+                MaxDataCount: globalConfig.MaxDataPayload
+            )
+        );
+
+        return new APIResponseData<object?>().ChangeData(data: data);
     }
 
-    [HttpDelete]
-    public IActionResult DeleteData()
+    [Tags(tags: "Insert Data"), HttpPost("DeleteData")]
+    public APIResponseData<object?> DeleteData([FromBody] JObject data)
     {
-        try
-        {
-            return Ok(new APIResponseData<object?>().ChangeData(data: null));
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(
-                new APIResponseData<object?>()
-                    .ChangeStatus(status: "Failed")
-                    .ChangeMessage(
-                        exception: ex,
-                        logging: systemLogging,
-                        includeStackTrace: Commons.IS_DEBUG_MODE
-                    )
-            );
-        }
+        return new APIResponseData<object?>().ChangeData(
+            data: data.PropGet<int?>(path: "id", defaultValue: 20)
+        );
     }
 }
