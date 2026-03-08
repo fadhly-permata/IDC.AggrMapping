@@ -1,6 +1,7 @@
 using Hangfire;
 using Hangfire.PostgreSql;
 using IDC.AggrMapping.Utilities;
+using IDC.AggrMapping.Utilities.Models;
 using IDC.Utilities;
 using IDC.Utilities.Comm.Http;
 using IDC.Utilities.Data;
@@ -393,19 +394,19 @@ internal partial class Program
         return builder;
     }
 
-    private static WebApplicationBuilder ConfigureGlobalConfiguration(
+    private static async Task<WebApplicationBuilder> SetupGlobalConfigurationAsync(
         this WebApplicationBuilder builder
     )
     {
-        // builder.Services.AddSingleton<GlobalConfigurationModel>(provider =>
-        // {
-        //     // Langsung load tanpa caching dulu (simple approach)
-        //     var pgHelper = provider.GetRequiredService<PostgreHelper>();
-        //     return new GlobalConfigurationModel.InitFromDatabase(
-        //         pgHelper: pgHelper,
-        //         cancellationToken: CancellationToken.None
-        //     );
-        // });
+        builder.Services.AddSingleton(async provider =>
+        {
+            var pgHelper = provider.GetRequiredService<PostgreHelper>();
+            var gcm = new GlobalConfigurationModel();
+            return await gcm.InitFromDatabase(
+                pgHelper: pgHelper,
+                cancellationToken: CancellationToken.None
+            );
+        });
 
         return builder;
     }

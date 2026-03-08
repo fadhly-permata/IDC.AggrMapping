@@ -14,7 +14,7 @@ internal static partial class Program
     private static AppSettings _appSettings = null!;
     private static SystemLogging _systemLogging = null!;
 
-    private static void Main(string[] args)
+    private static async Task Main(string[] args)
     {
         if (OperatingSystem.IsLinux())
             Environment.SetEnvironmentVariable(
@@ -39,6 +39,8 @@ internal static partial class Program
             .SetupPlugins()
             .SetupHangfire();
 
+        await builder.SetupGlobalConfigurationAsync();
+
         var app = builder.Build();
         ConfigureMiddlewares(app: app);
 
@@ -54,7 +56,7 @@ internal static partial class Program
             }
         );
 
-        app.Run();
+        await app.RunAsync();
     }
 
     // Filter untuk otorisasi dashboard
