@@ -2,41 +2,136 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using IDC.AggrMapping.Utilities;
 using IDC.Utilities;
+using IDC.Utilities.Comm.Http;
 using IDC.Utilities.Data;
 using IDC.Utilities.Extensions;
+using IDC.Utilities.Models.API;
 using IDC.Utilities.Models.Data;
 using IDC.Utilities.Plugins;
+using IDC.Utilities.Template.ConfigAndSettings;
+using IDC.Utilities.Template.Middlewares.Securities.ApiKey;
+using IDC.Utilities.Template.Middlewares.Validations;
+using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 
 namespace IDC.AggrMapping;
 
 internal partial class Program
 {
-    /// <summary>
-    /// Configures and registers caching service
-    /// </summary>
-    /// <param name="builder">The web application builder instance</param>
-    /// <remarks>
-    /// Sets up in-memory caching with configuration from appconfigs.jsonc:
-    ///
-    /// Example configuration:
-    /// <code>
-    /// {
-    ///   "DependencyInjection": {
-    ///     "Caching": {
-    ///       "Enable": true,
-    ///       "ExpirationInMinutes": 30
-    ///     }
-    ///   }
-    /// }
-    /// </code>
-    ///
-    /// > [!NOTE]
-    /// > Caching service is optional and will only be registered if enabled in configuration
-    /// </remarks>
-    /// <seealso cref="Caching"/>
-    /// <seealso href="https://learn.microsoft.com/en-us/aspnet/core/performance/caching/memory">Memory caching in ASP.NET Core</seealso>
-    private static void ConfigureCaching(WebApplicationBuilder builder)
+    private static WebApplicationBuilder SetupServices(this WebApplicationBuilder builder)
+    {
+        builder.Services.Configure<ApiBehaviorOptions>(options =>
+        {
+            options.SuppressModelStateInvalidFilter = true;
+        });
+
+        builder
+            .Services.AddControllers(configure: options =>
+            {
+                const string ContentType = "application/json";
+
+                // Tambahkan filter untuk model state validation
+                options.Filters.Add(item: new GenericModelValidation());
+
+                options.Filters.Add(item: new ConsumesAttribute(contentType: ContentType));
+                options.Filters.Add(item: new ProducesAttribute(contentType: ContentType));
+                options.Filters.Add(item: new ProducesResponseTypeAttribute(statusCode: 200));
+                options.Filters.Add(
+                    item: new ProducesResponseTypeAttribute(
+                        type: typeof(APIResponseData<List<string>?>),
+                        statusCode: StatusCodes.Status400BadRequest
+                    )
+                );
+                options.Filters.Add(
+                    item: new ProducesResponseTypeAttribute(
+                        type: typeof(APIResponseData<List<string>?>),
+                        statusCode: StatusCodes.Status500InternalServerError
+                    )
+                );
+            })
+            .AddNewtonsoftJson(setupAction: options =>
+            {
+                options.SerializerSettings.ContractResolver =
+                    new CamelCasePropertyNamesContractResolver();
+                options.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
+            });
+
+        // Add CORS policy
+        if (_appConfigurations.Get<bool>(path: "Middlewares.Cors.Enabled"))
+        {
+            builder.Services.AddCors(setupAction: options =>
+            {
+                options.AddPolicy(
+                    name: $"{CON_STR_APP_NAME}-CorsPolicy",
+                    configurePolicy: builder => { }
+                );
+            });
+        }
+
+        return builder;
+    }
+
+    private static WebApplicationBuilder SetupAppConfigurations(this WebApplicationBuilder builder)
+    {
+        _appConfigurations = new AppConfigurations(
+            appName: CON_STR_APP_NAME,
+            jsoncFilePath: Path.Combine(
+                    path1: Directory.GetCurrentDirectory().RefinePlatformPath(),
+                    path2: "appconfigs.jsonc"
+                )
+                .RefinePlatformPath(),
+            sqliteDbPath: Path.Combine(
+                    path1: Directory.GetCurrentDirectory().RefinePlatformPath(),
+                    path2: "idc-shr-dependency",
+                    path3: "appconfigs.db"
+                )
+                .RefinePlatformPath()
+        );
+
+        builder.Services.AddSingleton(implementationFactory: _ => _appConfigurations);
+        return builder;
+    }
+
+    private static WebApplicationBuilder SetupAppSettings(this WebApplicationBuilder builder)
+    {
+        _appSettings = AppSettings.Load(filePath: "appsettings.json");
+        builder.Services.AddSingleton(implementationFactory: _ => _appSettings);
+        return builder;
+    }
+
+    private static WebApplicationBuilder SetupLanguage(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddSingleton(implementationFactory: _ => new Language(
+            jsonPath: Path.Combine(
+                    path1: Directory.GetCurrentDirectory().RefinePlatformPath(),
+                    path2: "wwwroot/messages.json".RefinePlatformPath()
+                )
+                .RefinePlatformPath(),
+            defaultLanguage: _appConfigurations.Get(path: "Language", defaultValue: "en")!
+        ));
+        return builder;
+    }
+
+    private static WebApplicationBuilder SetupSystemLogging(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddSingleton(implementationFactory: _ =>
+        {
+            _systemLogging ??= new SystemLogging(
+                options: new SystemLoggingOptions().MapProperties(
+                    jObject: _appConfigurations.Get<JObject>(path: "Logging", throwOnNull: true)!
+                ),
+                source: CON_STR_APP_NAME
+            );
+            return _systemLogging;
+        });
+
+        return builder;
+    }
+
+    private static WebApplicationBuilder SetupCaching(this WebApplicationBuilder builder)
     {
         if (_appConfigurations.Get(path: "DependencyInjection.Caching.Enable", defaultValue: false))
             builder.Services.AddSingleton(static _ => new Caching(
@@ -45,58 +140,17 @@ internal partial class Program
                     defaultValue: 30
                 )
             ));
+
+        return builder;
     }
 
-    /// <summary>
-    /// Configures and registers the plugin manager service for the application.
-    /// </summary>
-    /// <param name="builder">
-    /// The <see cref="WebApplicationBuilder"/> instance used to register services.
-    /// </param>
-    /// <param name="systemLogging">
-    /// The <see cref="SystemLogging"/> instance for logging plugin operations.
-    /// </param>
-    /// <remarks>
-    /// Registers <see cref="PluginManager"/> as a singleton service if plugins are enabled in
-    /// <c>appconfigs.jsonc</c>. The plugin manager is initialized with the provided logging instance
-    /// and registers plugins from the configured source directory. The source directory is determined
-    /// by combining <c>Plugins.SourceDirectory</c> from configuration with a default fallback path.
-    /// <br/>
-    /// Example configuration:
-    /// <code>
-    /// {
-    ///   "Plugins": {
-    ///     "Enable": true,
-    ///     "SourceDirectory": "wwwroot/plugins/source"
-    ///   }
-    /// }
-    /// </code>
-    /// <br/>
-    /// > [!NOTE]
-    /// > The plugin manager will not be registered if <c>Plugins.Enable</c> is set to <c>false</c>.
-    /// <br/>
-    /// > [!TIP]
-    /// > Ensure that the plugin source directory exists and contains valid plugins.
-    /// <br/>
-    /// > [!IMPORTANT]
-    /// > The <see cref="PluginManager"/> is registered as a singleton to maintain plugin state
-    ///   throughout the application's lifetime.
-    /// </remarks>
-    /// <returns>
-    /// Registers the <see cref="PluginManager"/> service for dependency injection.
-    /// </returns>
-    /// <exception cref="DirectoryNotFoundException">
-    /// Thrown if the plugin source directory does not exist.
-    /// </exception>
-    /// <seealso cref="PluginManager"/>
-    /// <seealso href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection">Dependency Injection in .NET</seealso>
-    private static void ConfigurePlugins(WebApplicationBuilder builder, SystemLogging systemLogging)
+    private static WebApplicationBuilder SetupPlugins(this WebApplicationBuilder builder)
     {
         if (_appConfigurations.Get(path: "Plugins.Enable", defaultValue: false))
         {
             builder.Services.AddSingleton(implementationFactory: _ =>
             {
-                var plugin = new PluginManager(systemLogging: systemLogging);
+                var plugin = new PluginManager(systemLogging: _systemLogging);
                 plugin.Initialize(
                     sourceCodeDir: Path.Combine(
                         path1: _appConfigurations
@@ -120,58 +174,11 @@ internal partial class Program
                 return plugin;
             });
         }
+
+        return builder;
     }
 
-    /// <summary>
-    /// Configures and registers the PostgreSQL database service for the application.
-    /// </summary>
-    /// <param name="builder">
-    /// The <see cref="WebApplicationBuilder"/> instance used to register services.
-    /// </param>
-    /// <remarks>
-    /// Registers <see cref="PostgreHelper"/> as a scoped service if PostgreSQL is enabled in
-    /// <c>appconfigs.jsonc</c>. The connection string is retrieved from <c>appsettings.json</c>
-    /// using the configured key in <c>DefaultConStrings.IDCAggrMapping.PGSQL</c>. Logging is attached
-    /// if <c>Logging.RegisterAsDI</c> is enabled.
-    /// <br/>
-    /// Example configuration:
-    /// <code>
-    /// {
-    ///   "DependencyInjection": {
-    ///     "PGSQL": true
-    ///   },
-    ///   "DefaultConStrings": {
-    ///     "IDCAggrMapping": {
-    ///       "PGSQL": "ConnectionString_en"
-    ///     }
-    ///   },
-    ///   "DbContextSettings": {
-    ///     "ConnectionString_en": "Host=localhost;Port=5432;Database=mydb;Username=myuser;Password=mypassword"
-    ///   },
-    ///   "Logging": {
-    ///     "RegisterAsDI": true
-    ///   }
-    /// }
-    /// </code>
-    /// <br/>
-    /// > [!NOTE]
-    /// > The PostgreSQL service will not be registered if <c>DependencyInjection.PGSQL</c> is set to <c>false</c>.
-    /// <br/>
-    /// > [!TIP]
-    /// > Ensure the connection string is valid and the database is accessible.
-    /// <br/>
-    /// > [!IMPORTANT]
-    /// > <see cref="PostgreHelper"/> is registered as scoped to ensure per-request database context.
-    /// </remarks>
-    /// <returns>
-    /// Registers the <see cref="PostgreHelper"/> service for dependency injection.
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// Thrown if the connection string is missing or invalid.
-    /// </exception>
-    /// <seealso cref="PostgreHelper"/>
-    /// <seealso href="https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/">DbContext Configuration in .NET</seealso>
-    private static void ConfigurePGSQL(WebApplicationBuilder builder)
+    private static WebApplicationBuilder SetupPGSQL(this WebApplicationBuilder builder)
     {
         if (_appConfigurations.Get(path: "DependencyInjection.PGSQL", defaultValue: false))
             builder.Services.AddScoped(implementationFactory: static _ =>
@@ -214,37 +221,11 @@ internal partial class Program
                         : null
                 );
             });
+
+        return builder;
     }
 
-    /// <summary>
-    /// Configures and registers SQLite database service
-    /// </summary>
-    /// <param name="builder">The web application builder instance</param>
-    /// <remarks>
-    /// Initializes SQLite connection with configuration from appsettings.json:
-    ///
-    /// Example configuration:
-    /// <code>
-    /// {
-    ///   "SqLiteContextSettings": {
-    ///     "memory": "Data Source=:memory:;Cache=Private;Mode=Memory",
-    ///     "file": "Data Source=database.db;Cache=Shared;Mode=ReadWrite"
-    ///   },
-    ///   "DefaultConStrings": {
-    ///     "SQLite": "memory"
-    ///   }
-    /// }
-    /// </code>
-    ///
-    /// > [!TIP]
-    /// > Use memory mode for testing and temporary data storage
-    ///
-    /// > [!WARNING]
-    /// > Ensure proper file permissions when using file-based SQLite
-    /// </remarks>
-    /// <seealso cref="SQLiteHelper"/>
-    /// <seealso href="https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/">SQLite Database Provider</seealso>
-    private static void ConfigureSQLite(WebApplicationBuilder builder)
+    private static WebApplicationBuilder SetupSQLite(this WebApplicationBuilder builder)
     {
         if (_appConfigurations.Get(path: "DependencyInjection.SQLite", defaultValue: false))
             builder.Services.AddScoped(implementationFactory: static _ =>
@@ -275,37 +256,11 @@ internal partial class Program
                         logging: logging
                     );
             });
+
+        return builder;
     }
 
-    /// <summary>
-    /// Configures and registers MongoDB database service
-    /// </summary>
-    /// <param name="builder">The web application builder instance</param>
-    /// <remarks>
-    /// Sets up MongoDB connection with configuration from appsettings.json:
-    ///
-    /// Example configuration:
-    /// <code>
-    /// {
-    ///   "MongoDBSettings": {
-    ///     "local": "mongodb://localhost:27017",
-    ///     "production": "mongodb://user:password@host:port/database"
-    ///   },
-    ///   "DefaultConStrings": {
-    ///     "MongoDB": "local"
-    ///   }
-    /// }
-    /// </code>
-    ///
-    /// > [!IMPORTANT]
-    /// > Connection timeout is set to 5 seconds by default
-    ///
-    /// > [!CAUTION]
-    /// > Ensure proper security measures when storing connection strings
-    /// </remarks>
-    /// <seealso cref="IMongoDatabase"/>
-    /// <seealso href="https://www.mongodb.com/docs/drivers/csharp/current/">MongoDB .NET Driver</seealso>
-    private static void ConfigureMongoDB(WebApplicationBuilder builder)
+    private static WebApplicationBuilder SetupMongoDB(this WebApplicationBuilder builder)
     {
         if (_appConfigurations.Get(path: "DependencyInjection.MongoDB", defaultValue: false))
             builder.Services.AddScoped(static _ =>
@@ -329,18 +284,11 @@ internal partial class Program
 
                 return new MongoClient(settings).GetDatabase(settings.ApplicationName ?? "IDC_EN");
             });
+
+        return builder;
     }
 
-    /// <summary>
-    ///     Configures and registers Hangfire service
-    /// </summary>
-    /// <param name="builder">
-    ///     The <see cref="WebApplicationBuilder"/> > instance
-    /// </param>
-    /// <exception cref="InvalidOperationException">
-    ///     Thrown when the database password is not found
-    /// </exception>
-    private static void ConfigureHangfire(WebApplicationBuilder builder)
+    private static WebApplicationBuilder SetupHangfire(this WebApplicationBuilder builder)
     {
         string defaultConString = _appSettings.Get(
             path: "DefaultConStrings.IDCAggrMapping.PGSQL",
@@ -389,5 +337,76 @@ internal partial class Program
             options.WorkerCount = Environment.ProcessorCount * 5;
             options.Queues = ["high_priority", "default", "low_priority"];
         });
+
+        return builder;
+    }
+
+    private static WebApplicationBuilder SetupHttpClientUtility(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddHttpClientUtility(systemLogging: _systemLogging);
+        return builder;
+    }
+
+    private static WebApplicationBuilder SetupApiKeyAuthentication(
+        this WebApplicationBuilder builder
+    )
+    {
+        builder.Services.AddApiKeyAuthentication(opt =>
+        {
+            opt.SetLogger(logger: _systemLogging)
+                .MapProperties(
+                    jObject: _appConfigurations.Get<JObject>(
+                        path: "Middlewares.APIKey",
+                        defaultValue: []
+                    )!
+                );
+
+            // Buatkan logika untuk memproses API key dari sumber data
+            opt.ApiKeyFetcherAsync = async (apiKey) =>
+            {
+                await Task.Delay(millisecondsDelay: 10);
+                return true;
+            };
+
+            // Buatkan logika "TAMBAHAN" untuk memproses ketika API key tidak ditemukan
+            opt.OnApiKeyNotFoundAsync = async () =>
+            {
+                // Catatan: Tidak perlu membuat log di sini karena sudah ada di middleware
+                await Task.CompletedTask;
+            };
+
+            // Buatkan logika "TAMBAHAN" untuk memproses ketika API key tidak valid
+            opt.OnUnauthorizedAsync = async () =>
+            {
+                // Catatan: Tidak perlu membuat log di sini karena sudah ada di middleware
+                await Task.CompletedTask;
+            };
+
+            // Buatkan logika "TAMBAHAN" untuk memproses ketika API key valid
+            opt.OnAuthorizedAsync = async () =>
+            {
+                // Boleh membuat log karena belum ada proses logging di middleware
+                _systemLogging.LogInformation(message: "API key is valid");
+                await Task.CompletedTask;
+            };
+        });
+        return builder;
+    }
+
+    private static WebApplicationBuilder ConfigureGlobalConfiguration(
+        this WebApplicationBuilder builder
+    )
+    {
+        // builder.Services.AddSingleton<GlobalConfigurationModel>(provider =>
+        // {
+        //     // Langsung load tanpa caching dulu (simple approach)
+        //     var pgHelper = provider.GetRequiredService<PostgreHelper>();
+        //     return new GlobalConfigurationModel.InitFromDatabase(
+        //         pgHelper: pgHelper,
+        //         cancellationToken: CancellationToken.None
+        //     );
+        // });
+
+        return builder;
     }
 }

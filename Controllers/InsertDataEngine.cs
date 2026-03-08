@@ -1,9 +1,10 @@
+using IDC.AggrMapping.Utilities;
+using IDC.AggrMapping.Utilities.Data;
 using IDC.AggrMapping.Utilities.Models;
+using IDC.AggrMapping.Utilities.Models.Postgre;
 using IDC.Utilities;
-using IDC.Utilities.Extensions;
 using IDC.Utilities.Models.API;
 using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json.Linq;
 
 namespace IDC.AggrMapping.Controllers;
 
@@ -36,34 +37,54 @@ public partial class InsertDataEngine(
         CancellationToken cancellationToken = default
     )
     {
-        // var globalConfig = await caching.GetOrSetAsync(
-        //     key: "GlobalConfigurations",
-        //     valueFactory: () =>
-        //         new GlobalConfigurations().InitFromDatabase(
-        //             pgHelper: pgHelper,
-        //             cancellationToken: cancellationToken
-        //         ),
-        //     expirationRenewal: true,
-        //     expirationMinutes: 60
-        // );
+        try
+        {
+            // TODO: uncomment code di bawah ini dan hapus pragma-nya
+#pragma warning disable S125
+            // var globalConfig = await caching.GetOrSetAsync(
+            //     key: "GlobalConfigurations",
+            //     valueFactory: () =>
+            //         new GlobalConfigurations().InitFromDatabase(
+            //             pgHelper: pgHelper,
+            //             cancellationToken: cancellationToken
+            //         ),
+            //     expirationRenewal: true,
+            //     expirationMinutes: 60
+            // );
+#pragma warning restore S125
 
-        var globalConfig = new GlobalConfigurationModel();
+            var globalConfig = new GlobalConfigurationModel();
 
-        data.Validate(
-            configs: new MlaPayloadModel.MlaConfigs(
-                MaxMapCount: globalConfig.MaxMapCount,
-                MaxDataCount: globalConfig.MaxDataPayload
-            )
-        );
+            data.Validate(configs: globalConfig);
 
-        return new APIResponseData<object?>().ChangeData(data: data);
-    }
+            foreach (var mapCode in data.ConfMaptable)
+            {
+                var groupMapModel = await new GroupedMappingModel().Load(
+                    systemLogging: systemLogging,
+                    // pgHelper: pgHelper,
+                    caching: caching,
+                    mapCode: mapCode,
+                    cancellationToken: cancellationToken
+                );
 
-    [Tags(tags: "Insert Data"), HttpPost("DeleteData")]
-    public APIResponseData<object?> DeleteData([FromBody] JObject data)
-    {
-        return new APIResponseData<object?>().ChangeData(
-            data: data.PropGet<int?>(path: "id", defaultValue: 20)
-        );
+                await groupMapModel.ProcessMapToDB(
+                    payloadData: data,
+                    // pgHelper: pgHelper,
+                    cancellationToken: cancellationToken
+                );
+            }
+
+            return new APIResponseData<object?>().ChangeData(data: data);
+        }
+        catch (System.Exception ex)
+        {
+            return new APIResponseData<object?>()
+                .ChangeStatus(status: "Failed")
+                .ChangeMessage(
+                    exception: ex,
+                    logging: systemLogging,
+                    includeStackTrace: Commons.IS_DEBUG_MODE
+                );
+        }
     }
 }

@@ -8,10 +8,10 @@ namespace IDC.AggrMapping;
 
 internal partial class Program
 {
-    private static void ConfigureSwagger(WebApplicationBuilder builder)
+    private static WebApplicationBuilder SetupSwagger(this WebApplicationBuilder builder)
     {
         if (!_appConfigurations.Get<bool>(path: "SwaggerConfig.UI.Enable"))
-            return;
+            return builder;
 
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options =>
@@ -158,6 +158,8 @@ internal partial class Program
             if (_appConfigurations.Get<bool>(path: "SwaggerConfig.UI.SortEndpoints"))
                 options.DocumentFilter<SwaggerSortDocFilter>();
         });
+
+        return builder;
     }
 
     private static void ConfigureSwaggerUI(WebApplication app)
@@ -191,7 +193,10 @@ internal partial class Program
 
     private static void ConfigureDemoEndpoint(SwaggerUIOptions options)
     {
-        options.SwaggerEndpoint(url: "/swagger/Demo/swagger.json", name: "IDC.AggrMapping Demo API");
+        options.SwaggerEndpoint(
+            url: "/swagger/Demo/swagger.json",
+            name: "IDC.AggrMapping Demo API"
+        );
     }
 
     private static void ConfigureAdditionalEndpoints(SwaggerUIOptions options, WebApplication app)

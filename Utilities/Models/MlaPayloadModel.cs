@@ -58,7 +58,7 @@ public class MlaPayloadModel : BaseModel<MlaPayloadModel>
     /// </param>
 
 
-    public void Validate(MlaConfigs configs)
+    public void Validate(GlobalConfigurationModel configs)
     {
         // Validate FlowCode
         if (string.IsNullOrWhiteSpace(FlowCode))
@@ -77,9 +77,9 @@ public class MlaPayloadModel : BaseModel<MlaPayloadModel>
         if (Data == null || !Data.Any())
             throw new ArgumentException("Data cannot be null or empty.");
 
-        if (Data.Count > configs.MaxDataCount)
+        if (Data.Count > configs.MaxDataPayload)
             throw new ArgumentException(
-                $"Data cannot have more than {configs.MaxDataCount} items."
+                $"Data cannot have more than {configs.MaxDataPayload} items."
             );
     }
 }
