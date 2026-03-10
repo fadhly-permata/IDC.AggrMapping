@@ -1,9 +1,10 @@
 using IDC.AggrMapping.Utilities;
 using IDC.AggrMapping.Utilities.Models;
+using IDC.AggrMapping.Utilities.Models.Postgre;
 using IDC.Utilities;
+using IDC.Utilities.Data;
 using IDC.Utilities.Models.API;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ApiExplorer;
 
 namespace IDC.AggrMapping.Controllers;
 
@@ -12,8 +13,14 @@ namespace IDC.AggrMapping.Controllers;
 /// </summary>
 [Route("AggrMapping/[controller]")]
 [ApiController]
-public partial class InsertDataEngine(Caching caching, SystemLogging systemLogging) : ControllerBase
+public partial class InsertDataEngine(
+    Caching caching,
+    PostgreHelper pgHelper,
+    SystemLogging systemLogging
+) : ControllerBase
 {
+    private static readonly SemaphoreSlim _semaphore = new(1, 1);
+
     /// <summary>
     ///     Inserts data into the database
     /// </summary>
@@ -32,18 +39,45 @@ public partial class InsertDataEngine(Caching caching, SystemLogging systemLoggi
         CancellationToken cancellationToken = default
     )
     {
+        await _semaphore.WaitAsync(cancellationToken);
+
         try
         {
-            var globalConfig = await GetGlobalConfigurations(caching: caching);
-
-            data.Validate(
-                configs: new MlaPayloadModel.MlaConfigs(
-                    MaxMapCount: globalConfig.MaxMapCount,
-                    MaxDataCount: globalConfig.MaxDataPayload
-                )
+            var globalConfig = await caching.GetOrSetAsync(
+                key: "GlobalConfigurations",
+                valueFactory: async () =>
+                    await new GlobalConfigurationModel().InitFromDatabase(
+                        pgHelper: pgHelper,
+                        caching: caching,
+                        cancellationToken: cancellationToken
+                    ),
+                expirationRenewal: true,
+                expirationMinutes: 60
             );
 
-            return new APIResponseData<object?>().ChangeData(data: null);
+            data.Validate(configs: globalConfig);
+
+            foreach (var mapCode in data.ConfMaptable)
+            {
+                var groupMapModel = await new GroupedMappingModel().Load(
+                    systemLogging: systemLogging,
+                    pgHelper: pgHelper,
+                    caching: caching,
+                    mapCode: mapCode,
+                    cancellationToken: cancellationToken
+                );
+
+                if (groupMapModel is not null)
+                    await groupMapModel.DoUpsert(
+                        payload: data,
+                        pgHelper: pgHelper,
+                        caching: caching,
+                        systemLogging: systemLogging,
+                        cancellationToken: cancellationToken
+                    );
+            }
+
+            return new APIResponseData<object?>().ChangeData(data: data);
         }
         catch (Exception ex)
         {
@@ -55,26 +89,9 @@ public partial class InsertDataEngine(Caching caching, SystemLogging systemLoggi
                     includeStackTrace: Commons.IS_DEBUG_MODE
                 );
         }
-    }
-
-    [HttpDelete]
-    public IActionResult DeleteData()
-    {
-        try
+        finally
         {
-            return Ok(new APIResponseData<object?>().ChangeData(data: null));
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(
-                new APIResponseData<object?>()
-                    .ChangeStatus(status: "Failed")
-                    .ChangeMessage(
-                        exception: ex,
-                        logging: systemLogging,
-                        includeStackTrace: Commons.IS_DEBUG_MODE
-                    )
-            );
+            _semaphore.Release();
         }
     }
 }

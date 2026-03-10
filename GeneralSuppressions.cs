@@ -34,3 +34,11 @@
     Target = "~N:IDC.AggrMapping",
     Justification = "TODO comments are used for development tracking and will be addressed before production releases."
 )]
+
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage(
+    category: "SonarAnalyzer",
+    checkId: "S2325",
+    Scope = "namespaceanddescendants",
+    Target = "~N:IDC.AggrMapping.Utilities.Models",
+    Justification = "SonarQube salah analisa struktur kode, jadi gak bisa di paksa nurut ke sonarqube"
+)]

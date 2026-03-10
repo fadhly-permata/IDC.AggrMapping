@@ -8,10 +8,10 @@ namespace IDC.AggrMapping;
 
 internal partial class Program
 {
-    private static void ConfigureSwagger(WebApplicationBuilder builder)
+    private static WebApplicationBuilder SetupSwagger(this WebApplicationBuilder builder)
     {
         if (!_appConfigurations.Get<bool>(path: "SwaggerConfig.UI.Enable"))
-            return;
+            return builder;
 
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options =>
@@ -158,6 +158,8 @@ internal partial class Program
             if (_appConfigurations.Get<bool>(path: "SwaggerConfig.UI.SortEndpoints"))
                 options.DocumentFilter<SwaggerSortDocFilter>();
         });
+
+        return builder;
     }
 
     private static void ConfigureSwaggerUI(WebApplication app)
@@ -178,6 +180,8 @@ internal partial class Program
             ConfigureAdditionalEndpoints(options: options, app: app);
 
             ConfigureSwaggerUIStyle(options: options);
+
+            options.RoutePrefix = $"swagger/{AppNameTrimmed()}";
         });
     }
 
@@ -191,7 +195,10 @@ internal partial class Program
 
     private static void ConfigureDemoEndpoint(SwaggerUIOptions options)
     {
-        options.SwaggerEndpoint(url: "/swagger/Demo/swagger.json", name: "IDC.AggrMapping Demo API");
+        options.SwaggerEndpoint(
+            url: "/swagger/Demo/swagger.json",
+            name: "IDC.AggrMapping Demo API"
+        );
     }
 
     private static void ConfigureAdditionalEndpoints(SwaggerUIOptions options, WebApplication app)
@@ -201,7 +208,7 @@ internal partial class Program
             .Get<List<SwaggerEndpoint>>()
             ?.Where(predicate: endpoint =>
                 endpoint.Name != $"{CON_STR_APP_NAME} - API Docs"
-                && endpoint.Name != "IDC.AggrMapping Demo API"
+                && endpoint.Name != $"{CON_STR_APP_NAME} Demo API"
             )
             .OrderBy(keySelector: endpoint => endpoint.Name);
 
