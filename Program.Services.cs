@@ -1,7 +1,6 @@
 using Hangfire;
 using Hangfire.PostgreSql;
 using IDC.AggrMapping.Utilities;
-using IDC.AggrMapping.Utilities.Models;
 using IDC.Utilities;
 using IDC.Utilities.Comm.Http;
 using IDC.Utilities.Data;
@@ -66,7 +65,7 @@ internal partial class Program
             builder.Services.AddCors(setupAction: options =>
             {
                 options.AddPolicy(
-                    name: $"{CON_STR_APP_NAME}-CorsPolicy",
+                    name: $"{AppNameTrimmed()}-CorsPolicy",
                     configurePolicy: builder => { }
                 );
             });
@@ -332,13 +331,6 @@ internal partial class Program
                 })
         );
 
-        // Register Hangfire Server
-        builder.Services.AddHangfireServer(optionsAction: options =>
-        {
-            options.WorkerCount = Environment.ProcessorCount * 5;
-            options.Queues = ["high_priority", "default", "low_priority"];
-        });
-
         return builder;
     }
 
@@ -391,23 +383,6 @@ internal partial class Program
                 await Task.CompletedTask;
             };
         });
-        return builder;
-    }
-
-    private static async Task<WebApplicationBuilder> SetupGlobalConfigurationAsync(
-        this WebApplicationBuilder builder
-    )
-    {
-        builder.Services.AddSingleton(async provider =>
-        {
-            var pgHelper = provider.GetRequiredService<PostgreHelper>();
-            var gcm = new GlobalConfigurationModel();
-            return await gcm.InitFromDatabase(
-                pgHelper: pgHelper,
-                cancellationToken: CancellationToken.None
-            );
-        });
-
         return builder;
     }
 }

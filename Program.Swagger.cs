@@ -180,6 +180,8 @@ internal partial class Program
             ConfigureAdditionalEndpoints(options: options, app: app);
 
             ConfigureSwaggerUIStyle(options: options);
+
+            options.RoutePrefix = $"swagger/{AppNameTrimmed()}";
         });
     }
 
@@ -206,7 +208,7 @@ internal partial class Program
             .Get<List<SwaggerEndpoint>>()
             ?.Where(predicate: endpoint =>
                 endpoint.Name != $"{CON_STR_APP_NAME} - API Docs"
-                && endpoint.Name != "IDC.AggrMapping Demo API"
+                && endpoint.Name != $"{CON_STR_APP_NAME} Demo API"
             )
             .OrderBy(keySelector: endpoint => endpoint.Name);
 

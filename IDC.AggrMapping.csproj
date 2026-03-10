@@ -39,5 +39,6 @@
     <ItemGroup>
       <Folder Include="Utilities\Attributes\" />
       <Folder Include="Utilities\Data\" />
+      <Folder Include="Utilities\DbMigrations\" />
     </ItemGroup>
 </Project>

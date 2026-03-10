@@ -2,6 +2,7 @@ using IDC.AggrMapping.Utilities.Models;
 using IDC.AggrMapping.Utilities.Models.Postgre;
 using IDC.Utilities;
 using IDC.Utilities.Data;
+using IDC.Utilities.Extensions;
 using Newtonsoft.Json.Linq;
 
 namespace IDC.AggrMapping.Utilities.Data;
@@ -9,7 +10,7 @@ namespace IDC.AggrMapping.Utilities.Data;
 internal static class GlobalConfigurationData
 {
     internal static async Task<JObject?> GetGlobalConfigurationsAsync(
-        PostgreHelper pgHelper,
+        this PostgreHelper pgHelper,
         string[] configCodes,
         CancellationToken cancellationToken = default
     )
@@ -42,6 +43,32 @@ internal static class GlobalConfigurationData
 
 internal static class InsertDataData
 {
+    internal static async Task<JObject?> GetGroupedMappingAsync(
+        this PostgreHelper pgHelper,
+        string mapCode,
+        CancellationToken cancellationToken = default
+    )
+    {
+        mapCode.ThrowIfNullOrWhitespace(nameof(mapCode));
+
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        (_, var result) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "aggregation",
+                SPName = "get_map_configs",
+                Parameters =
+                [
+                    new PostgreHelper.SPParameter { Name = "p_map_code", Value = mapCode },
+                ],
+            },
+            callback: data => { },
+            cancellationToken: cancellationToken
+        );
+
+        return result != null ? JObject.Parse(json: result.ToString() ?? "{}") : null;
+    }
+
     // TODO: uncomment code di bawah ini dan update nama sp dan parameternya
     internal static async Task<int> ProcessMapToDB(
         this GroupedMappingModel? groupMapData,

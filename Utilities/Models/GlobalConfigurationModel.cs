@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using IDC.AggrMapping.Utilities.Data;
+using IDC.Utilities;
 using IDC.Utilities.Data;
 using IDC.Utilities.Extensions;
 using IDC.Utilities.Interfaces;
@@ -15,6 +16,7 @@ public class GlobalConfigurationModel : BaseModel<GlobalConfigurationModel>
     private const int DFLT_MAX_DEPTH = 3;
     private const int DFLT_MAX_MAP_CNT = 5;
     private const int DFLT_MAX_DATA_PLOAD = 20;
+    private const int DFLT_MAX_GRP_MAP_CNT = 5;
 
     /// <summary>
     ///     Gets or sets the maximum number of parallel processes.
@@ -40,17 +42,24 @@ public class GlobalConfigurationModel : BaseModel<GlobalConfigurationModel>
     [JsonPropertyName("maxDataPayload")]
     public int MaxDataPayload { get; set; } = DFLT_MAX_DATA_PLOAD;
 
+    /// <summary>
+    ///     Gets or sets the maximum number of map items allowed in a group.
+    /// </summary>
+    [JsonPropertyName("maxGroupMapCount")]
+    public int MaxGroupMapCount { get; set; } = DFLT_MAX_GRP_MAP_CNT;
+
     /// <inheritdoc/>
-    public override string ToString()
-    {
-        return $"MaxParallelProcess: {MaxParallelProcess}, MaxDepth: {MaxDepth}, MaxMapCount: {MaxMapCount}, MaxDataPayload: {MaxDataPayload}";
-    }
+    public override string ToString() =>
+        $"MaxParallelProcess: {MaxParallelProcess}, MaxDepth: {MaxDepth}, MaxMapCount: {MaxMapCount}, MaxDataPayload: {MaxDataPayload}";
 
     /// <summary>
     ///     Initializes the global configurations from the database.
     /// </summary>
     /// <param name="pgHelper">
     ///     The PostgreHelper instance.
+    /// </param>
+    /// <param name="caching">
+    ///     The caching instance.
     /// </param>
     /// <param name="cancellationToken">
     ///     The cancellation token.
@@ -60,23 +69,29 @@ public class GlobalConfigurationModel : BaseModel<GlobalConfigurationModel>
     /// </returns>
     public async Task<GlobalConfigurationModel> InitFromDatabase(
         PostgreHelper pgHelper,
+        Caching caching,
         CancellationToken cancellationToken = default
-    )
-    {
-        var configData = await GlobalConfigurationData.GetGlobalConfigurationsAsync(
-            pgHelper: pgHelper,
-            configCodes: ["GAM01", "GAM02", "GAM03", "GAM04"],
-            cancellationToken: cancellationToken
+    ) =>
+        await caching.GetOrSetAsync(
+            key: "GlobalConfigurations",
+            valueFactory: async () =>
+            {
+                var cData = await pgHelper.GetGlobalConfigurationsAsync(
+                    configCodes: ["GAM01", "GAM02", "GAM03", "GAM04", "GAM05"],
+                    cancellationToken: cancellationToken
+                );
+
+                if (cData is null)
+                    return this;
+
+                MaxParallelProcess = cData.PropGet("GAM01", defaultValue: DFLT_MAX_PRL_PROC);
+                MaxDepth = cData.PropGet("GAM02", defaultValue: DFLT_MAX_DEPTH);
+                MaxMapCount = cData.PropGet("GAM03", defaultValue: DFLT_MAX_MAP_CNT);
+                MaxDataPayload = cData.PropGet("GAM04", defaultValue: DFLT_MAX_DATA_PLOAD);
+                MaxGroupMapCount = cData.PropGet("GAM05", defaultValue: DFLT_MAX_GRP_MAP_CNT);
+
+                return this;
+            },
+            expirationRenewal: true
         );
-
-        if (configData is null)
-            return this;
-
-        MaxParallelProcess = configData.PropGet("GAM01", defaultValue: DFLT_MAX_PRL_PROC);
-        MaxDepth = configData.PropGet("GAM02", defaultValue: DFLT_MAX_DEPTH);
-        MaxMapCount = configData.PropGet("GAM03", defaultValue: DFLT_MAX_MAP_CNT);
-        MaxDataPayload = configData.PropGet("GAM04", defaultValue: DFLT_MAX_DATA_PLOAD);
-
-        return this;
-    }
 }

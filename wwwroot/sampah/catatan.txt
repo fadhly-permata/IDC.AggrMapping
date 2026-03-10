@@ -15,6 +15,12 @@ INSERT DATA
     - data_process.map_dtl
     - data_process.map_hdr
 3. Untuk data hasil map insert data sementara pake cache aja dulu sambil disiapin kalo2 ada kebutuhan migrasi ke teknologi lain.
+4. Untuk Upsert gunakan kondisi berikut:
+    - Kondisi Upsert gunakan property PK di table
+    - Untuk yang PK-nya menggunakan Auto Increment di throw
+    - Untuk table yang gak punya PK di throw
+    - gak ada limit di field dan kalo kosong tetap dilanjutkan aja
+    - tambah validasi jumlah array max group mapping, kalo lebih langsung throw aja
 
 
 Contoh logging kalo pake file log
@@ -49,6 +55,8 @@ grouped_mappings": [
     "confAggMapCode": "AGG01",
     "data": [
         {
+            "cp_cif": "0000000000000001488",
+            "cp_domicile": "SALATIGA, KOTA",
             "installment_type": "equal",
             "Installment_amortisasi": -1,
             "grace_periode": 0,
@@ -130,35 +138,257 @@ grouped_mappings": [
 ================
 
 
-"grouped_mappings": [
+{
+  "map_code": "dis_aml_monitoring",
+  "grouped_mappings": [
     {
-        "destination": {
-            "db_type": "POSTGRES",
-            "db_name": "customer_db",
-            "schema": "public",
-            "table": "customer_profile"
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.cust",
+        "schema": "borrower",
+        "table": "borrower_corporate_info"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": true,
+          "source_field": "bbi_cif",
+          "destination_column": "bci_cif"
         },
-        "operation": "UPSERT",
-        "field_mappings": [
-            {
-                "source_field": "cst_ktp",
-                "destination_column": "ktp"
-            },
-            {
-                "source_field": "cst_email",
-                "destination_column": "email",
-            },
-            {
-                "source_field": "cst_birthdate",
-                "destination_column": "birth_date",
-            },
-            {
-                "source_field": "cst_fullname",
-                "destination_column": "full_name",
-            }
-        ]
+        {
+          "is_primary_key": false,
+          "source_field": "bbi_va_number",
+          "destination_column": "bci_deed_of_establishment_no"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "bbi_sample",
+          "destination_column": "bci_deed_of_modification_no"
+        }
+      ]
+    },
+    {
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.en",
+        "schema": "batch",
+        "table": "b_collection"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": false,
+          "source_field": "",
+          "destination_column": "bc_id"
+        }
+      ]
+    },
+    {
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.en",
+        "schema": "batch_df",
+        "table": "batch_counter"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": false,
+          "source_field": "",
+          "destination_column": "b_code"
+        }
+      ]
+    },
+    {
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.kaml",
+        "schema": "aml",
+        "table": "aml_monitoring"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": false,
+          "source_field": "flag2",
+          "destination_column": "ams_process_status"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "flag3",
+          "destination_column": "ams_decision_user"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "flag4",
+          "destination_column": "ams_notes"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "flag8",
+          "destination_column": "ams_action_code"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "flag9",
+          "destination_column": "ams_rpt_flag"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "rc1",
+          "destination_column": "ams_reference_no"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "cst_fname",
+          "destination_column": "ams_amo_customer_name"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "cst_type_code",
+          "destination_column": "ams_customer_type"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "cst_ktp",
+          "destination_column": "ams_id_number"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "",
+          "destination_column": "ams_is_picked_out"
+        }
+      ]
+    },
+    {
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.kaml",
+        "schema": "aml",
+        "table": "aml_workflow"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": false,
+          "source_field": "",
+          "destination_column": "aw_status"
+        }
+      ]
+    },
+    {
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.kaml",
+        "schema": "aml",
+        "table": "tasklist_history"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": false,
+          "source_field": "ams_process_date",
+          "destination_column": "thi_update_date"
+        }
+      ]
+    },
+    {
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.kaml",
+        "schema": "compliance",
+        "table": "compliance_strategy_log"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": false,
+          "source_field": "aw_wftype",
+          "destination_column": "csl_created_by"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "aw_ref_number",
+          "destination_column": "csl_code"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "",
+          "destination_column": "csl_effective_date"
+        },
+        {
+          "is_primary_key": false,
+          "source_field": "",
+          "destination_column": "csl_approved_by"
+        }
+      ]
+    },
+    {
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.kaml",
+        "schema": "customer_info",
+        "table": "cust_info"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": false,
+          "source_field": "cs_name",
+          "destination_column": "ci_version"
+        }
+      ]
+    },
+    {
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.kaml",
+        "schema": "interfaces",
+        "table": "contact_info"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": false,
+          "source_field": "",
+          "destination_column": "con_website"
+        }
+      ]
+    },
+    {
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.kaml",
+        "schema": "kyc",
+        "table": "kyc_indicative"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": false,
+          "source_field": "",
+          "destination_column": "ki_ref_no"
+        }
+      ]
+    },
+    {
+      "destination": {
+        "db_type": "POSTGRES",
+        "db_name": "idc.kaml",
+        "schema": "public",
+        "table": "reff_signatory"
+      },
+      "operation": "UPSERT",
+      "field_mappings": [
+        {
+          "is_primary_key": false,
+          "source_field": "",
+          "destination_column": "sig_lname"
+        }
+      ]
     }
-]
+  ]
+}
 
 
 =====
