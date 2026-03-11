@@ -9,18 +9,25 @@ using Microsoft.AspNetCore.Mvc;
 namespace IDC.AggrMapping.Controllers;
 
 /// <summary>
-/// Controller for handling multi-layer adapter operations
+///     Controller for Insert Data
 /// </summary>
+/// <param name="caching">
+///     Service for caching
+/// </param>
+/// <param name="pgHelper">
+///     Service for handling PostgreSQL
+/// </param>
+/// <param name="systemLogging">
+///     Service for system logging
+/// </param>
 [Route("AggrMapping/[controller]")]
 [ApiController]
-public partial class InsertDataEngine(
+public partial class InsertEngine(
     Caching caching,
     PostgreHelper pgHelper,
     SystemLogging systemLogging
 ) : ControllerBase
 {
-    private static readonly SemaphoreSlim _semaphore = new(1, 1);
-
     /// <summary>
     ///     Inserts data into the database
     /// </summary>
@@ -33,14 +40,12 @@ public partial class InsertDataEngine(
     /// <returns>
     ///     APIResponseData containing the result
     /// </returns>
-    [Tags(tags: "Insert Data"), HttpPost("InsertData")]
-    public async Task<APIResponseData<object?>> InsertData(
+    [Tags(tags: "Insert Data"), HttpPost("Insert")]
+    public async Task<APIResponseData<object?>> Insert(
         [FromBody] MlaPayloadModel data,
         CancellationToken cancellationToken = default
     )
     {
-        await _semaphore.WaitAsync(cancellationToken);
-
         try
         {
             var globalConfig = await caching.GetOrSetAsync(
@@ -88,10 +93,6 @@ public partial class InsertDataEngine(
                     logging: systemLogging,
                     includeStackTrace: Commons.IS_DEBUG_MODE
                 );
-        }
-        finally
-        {
-            _semaphore.Release();
         }
     }
 }

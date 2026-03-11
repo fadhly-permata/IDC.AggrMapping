@@ -174,9 +174,6 @@ public class GroupedMappingModel : BaseModel<GroupedMappingModel>
         CancellationToken cancellationToken = default
     )
     {
-        if (payload?.Data == null)
-            return;
-
         foreach (var group in GroupedMappings)
         {
             // Membuat parameter untuk setiap field mapping
@@ -185,37 +182,34 @@ public class GroupedMappingModel : BaseModel<GroupedMappingModel>
 
             foreach (var dataItem in payload.Data)
             {
-                if (dataItem == null)
-                    continue;
-
                 var values = new List<string>();
                 var rowColumns = new List<string>();
 
                 foreach (var field in group.FieldMappings)
                 {
-                    // Dapatkan nilai dari nested property
-                    var value = GetNestedPropertyValue(dataItem, field.SourceField);
+                    // Dapatkan nilai dari payload.data sesuai dengan source_field
+                    var jToken = dataItem[field.SourceField];
+                    var value = jToken?.ToString();
 
-                    // Skip jika nilai null atau string kosong
-                    if (value == null || (value is string str && string.IsNullOrWhiteSpace(str)))
+                    // Skip jika nilai null atau empty
+                    if (string.IsNullOrWhiteSpace(value))
                         continue;
 
                     rowColumns.Add(field.DestinationColumn);
 
                     if (field.RequiresQuotation())
                     {
-                        values.Add(
-                            $"'{value.ToString()?.Replace("'", "''", StringComparison.Ordinal)}'"
-                        );
+                        // Escape single quote dan bungkus dengan single quote
+                        values.Add($"'{value?.ToString()?.Replace("'", "''")}'");
                     }
                     else
                     {
-                        values.Add(value.ToString() ?? string.Empty);
+                        values.Add(value?.ToString() ?? "NULL");
                     }
                 }
 
                 // Pastikan ada kolom yang akan diinsert
-                if (rowColumns.Count > 0)
+                if (rowColumns.Count != 0)
                 {
                     // Untuk baris pertama, set columns
                     if (columns.Count == 0)
@@ -240,46 +234,31 @@ public class GroupedMappingModel : BaseModel<GroupedMappingModel>
                     if (field.IsPrimaryKey)
                         continue;
 
-                    var value = GetNestedPropertyValue(firstData, field.SourceField);
+                    var prop = firstData[field.SourceField];
+                    var value = prop?.ToString();
 
                     // Skip jika nilai null
-                    if (value == null || (value is string str && string.IsNullOrWhiteSpace(str)))
-                        continue;
-
-                    var valueStr = value.ToString();
-                    if (string.IsNullOrEmpty(valueStr))
+                    if (string.IsNullOrWhiteSpace(value))
                         continue;
 
                     if (field.RequiresQuotation())
                     {
                         updateSet.Add(
-                            $"{field.DestinationColumn} = '{valueStr.Replace("'", "''", StringComparison.Ordinal)}'"
+                            $"{field.DestinationColumn} = '{value?.ToString()?.Replace("'", "''")}'"
                         );
                     }
                     else
                     {
-                        updateSet.Add($"{field.DestinationColumn} = {valueStr}");
+                        updateSet.Add($"{field.DestinationColumn} = {value}");
                     }
                 }
             }
 
             // Jika tidak ada field yang akan diupdate, gunakan DO NOTHING
             var onConflictAction =
-                updateSet.Count > 0
+                updateSet.Count != 0
                     ? $"DO UPDATE SET {string.Join(", ", updateSet)}"
                     : "DO NOTHING";
-
-            var primaryKeyColumn = group
-                .FieldMappings.FirstOrDefault(x => x.IsPrimaryKey)
-                ?.DestinationColumn;
-
-            if (string.IsNullOrEmpty(primaryKeyColumn))
-            {
-                systemLogging.LogWarning(
-                    $"Primary key not found for group: {group.Destination.Schema}.{group.Destination.Table}"
-                );
-                continue;
-            }
 
             var strQuery =
                 $@"
@@ -289,109 +268,44 @@ public class GroupedMappingModel : BaseModel<GroupedMappingModel>
                     VALUES
                         {string.Join(",\n", valuesList)}
                     ON CONFLICT 
-                        ({primaryKeyColumn})
-                    {onConflictAction}
+                        ({group.FieldMappings.Single(x => x.IsPrimaryKey).DestinationColumn})
+                        {onConflictAction}
                     RETURNING 
                         1;
                 ";
 
             // kalo destination.dbname bukan idc.kaml, wrap strQuery dengan dblink
-            if (
-                !string.Equals(
-                    group.Destination.DbName,
-                    "idc.kaml",
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
+            if (group.Destination.DbName != "idc.kaml")
             {
-                var dbName = group.Destination.DbName.Replace(
-                    "idc.",
-                    "",
-                    StringComparison.OrdinalIgnoreCase
-                );
                 strQuery =
                     $@"
-                SELECT 
-                    dblink(
-                        public.get_dblink_constring('{dbName}'), 
-                        '{strQuery?.Replace("'", "''", StringComparison.Ordinal)}'
-                    )
-            ";
+                        SELECT t.result
+                        FROM public.get_dblink_constring('{group.Destination.DbName.Replace("idc.", "", comparisonType: StringComparison.OrdinalIgnoreCase)}') AS conn_str
+                        CROSS JOIN LATERAL
+                            dblink(
+                                conn_str, 
+                                '{strQuery.Replace("'", "''")}'
+                            ) as t(result int)
+                        ;
+                    ";
             }
 
             systemLogging.LogInformation($"[ Generated Query ]\n{strQuery}");
 
-            try
-            {
-                await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
-                (_, var result) = await pgHelper.ExecuteScalarAsync(
-                    query: strQuery ?? string.Empty,
-                    callback: data => { },
-                    cancellationToken: cancellationToken
-                );
+            await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+            (_, var result) = await pgHelper.ExecuteScalarAsync(
+                query: strQuery,
+                callback: data => { },
+                cancellationToken: cancellationToken
+            );
 
-                if (result?.ToString() == "1")
-                {
-                    await this.WriteSuccessLog(
-                        mapCode: MapCode,
-                        systemLogging: systemLogging,
-                        cancellationToken: cancellationToken
-                    );
-                }
-                else
-                {
-                    await this.WriteFailLog(
-                        mapCode: MapCode,
-                        systemLogging: systemLogging,
-                        cancellationToken: cancellationToken
-                    );
-                }
-            }
-            catch (Exception ex)
-            {
-                systemLogging.LogError($"Error executing query: {ex.Message}");
-                await this.WriteFailLog(
-                    mapCode: MapCode,
-                    systemLogging: systemLogging,
-                    cancellationToken: cancellationToken
-                );
-            }
+            await CustomLoggingData.WriteUpsertLog(
+                mapCode: MapCode,
+                status: result?.ToString() == "1" ? "Success" : "Failed",
+                generatedQuery: strQuery,
+                systemLogging: systemLogging,
+                cancellationToken: cancellationToken
+            );
         }
-    }
-
-    private static object? GetNestedPropertyValue(object? obj, string? propertyPath)
-    {
-        if (obj == null || string.IsNullOrEmpty(propertyPath))
-            return null;
-
-        object? current = obj;
-        var properties = propertyPath.Split('.');
-
-        for (int i = 0; i < properties.Length; i++)
-        {
-            var prop = properties[i];
-            if (current == null)
-                return null;
-
-            var type = current.GetType();
-            var propInfo = type.GetProperty(prop);
-
-            if (propInfo == null)
-                return null;
-
-            current = propInfo.GetValue(current);
-
-            if (
-                current is System.Collections.IEnumerable enumerable
-                && current is not string
-                && current.GetType() != typeof(byte[])
-                && i < properties.Length - 1
-            )
-            {
-                current = enumerable.Cast<object?>().FirstOrDefault();
-            }
-        }
-
-        return current;
     }
 }

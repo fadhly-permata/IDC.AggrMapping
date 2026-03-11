@@ -66,11 +66,14 @@ public class DemoHangfire(SystemLogging systemLogging, PostgreHelper pgHelper) :
     ///     APIResponse
     /// </returns>
     [HttpPost(template: "Queue/EnqueueDataProcessing")]
-    public async Task<APIResponse> EnqueueDataProcessing([FromBody] string dataId)
+    public async Task<APIResponse> EnqueueDataProcessing(
+        [FromBody] string dataId,
+        int simulateProcessInSecond = 60
+    )
     {
         try
         {
-            DataProcessingJob.EnqueueDataProcessing(dataId);
+            DataProcessingJob.EnqueueDataProcessing(dataId, simulateProcessInSecond);
             return new APIResponse();
         }
         catch (Exception ex)
@@ -96,12 +99,17 @@ public class DemoHangfire(SystemLogging systemLogging, PostgreHelper pgHelper) :
     [HttpPost(template: "Queue/ScheduleDataProcessing")]
     public async Task<APIResponse> ScheduleDataProcessing(
         [FromBody] string dataId,
-        int delayInSecond
+        int delayInSecond,
+        int simulateProcessInSecond = 60
     )
     {
         try
         {
-            DataProcessingJob.ScheduleDataProcessing(dataId, TimeSpan.FromSeconds(delayInSecond));
+            DataProcessingJob.ScheduleDataProcessing(
+                dataId,
+                TimeSpan.FromSeconds(delayInSecond),
+                simulateProcessInSecond
+            );
             return new APIResponse();
         }
         catch (Exception ex)
@@ -124,8 +132,17 @@ public class DataProcessingJob(SystemLogging systemLogging)
     /// <param name="dataId">Identifier for the data to process</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the asynchronous operation</returns>
-    public async Task ProcessDataAsync(string dataId, CancellationToken cancellationToken = default)
+    public async Task ProcessDataAsync(
+        string dataId,
+        int simulateProcessInSecond = 0,
+        CancellationToken cancellationToken = default
+    )
     {
+        await Task.Delay(
+            millisecondsDelay: simulateProcessInSecond * 1000,
+            cancellationToken: cancellationToken
+        );
+
         systemLogging.LogInformation($"Starting data processing for ID: {dataId}");
 
         // LAKUKAN SESUATU DI SINI
@@ -138,10 +155,14 @@ public class DataProcessingJob(SystemLogging systemLogging)
     /// </summary>
     /// <param name="dataId">Identifier for the data to process</param>
     /// <param name="delay">Delay before processing</param>
-    public static void ScheduleDataProcessing(string dataId, TimeSpan delay)
+    public static void ScheduleDataProcessing(
+        string dataId,
+        TimeSpan delay,
+        int simulateProcessInSecond = 0
+    )
     {
         BackgroundJob.Schedule<DataProcessingJob>(
-            job => job.ProcessDataAsync(dataId, CancellationToken.None),
+            job => job.ProcessDataAsync(dataId, 0, CancellationToken.None),
             delay
         );
     }
@@ -150,10 +171,10 @@ public class DataProcessingJob(SystemLogging systemLogging)
     /// Enqueues a data processing job immediately
     /// </summary>
     /// <param name="dataId">Identifier for the data to process</param>
-    public static void EnqueueDataProcessing(string dataId)
+    public static void EnqueueDataProcessing(string dataId, int simulateProcessInSecond = 0)
     {
         BackgroundJob.Enqueue<DataProcessingJob>(job =>
-            job.ProcessDataAsync(dataId, CancellationToken.None)
+            job.ProcessDataAsync(dataId, simulateProcessInSecond, CancellationToken.None)
         );
     }
 }

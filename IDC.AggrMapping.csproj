@@ -6,9 +6,6 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <InvariantGlobalization>true</InvariantGlobalization>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <!-- Tambahan untuk faster reload -->
-        <!-- <UseSharedCompilation>false</UseSharedCompilation>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies> -->
     </PropertyGroup>
     <ItemGroup>
         <None Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
@@ -32,13 +29,6 @@
     <ItemGroup>
         <Reference Include="IDC.Utilities">
             <HintPath>idc-shr-dependency\IDC.Utilities.dll</HintPath>
-            <!-- Tambahan untuk faster detection -->
-            <!-- <Private>true</Private> -->
         </Reference>
-    </ItemGroup>
-    <ItemGroup>
-      <Folder Include="Utilities\Attributes\" />
-      <Folder Include="Utilities\Data\" />
-      <Folder Include="Utilities\DbMigrations\" />
     </ItemGroup>
 </Project>

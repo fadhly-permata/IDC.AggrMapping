@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using IDC.AggrMapping.Utilities.Models.AggregateEngine;
 using IDC.Utilities.Interfaces;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -9,7 +10,7 @@ namespace IDC.AggrMapping.Utilities.Models;
 /// <summary>
 ///     Represents a model for MlaPayload.
 /// </summary>
-public class MlaPayloadModel : BaseModel<MlaPayloadModel>
+public partial class MlaPayloadModel : BaseModel<MlaPayloadModel>
 {
     /// <summary>
     ///     Gets or sets the flow code.
@@ -38,27 +39,22 @@ public class MlaPayloadModel : BaseModel<MlaPayloadModel>
     /// </summary>
     [JsonProperty(propertyName: "data")]
     public JArray Data { get; set; } = [];
+}
 
-    /// <summary>
-    ///     Initializes a new instance of the <see cref="MlaPayloadModel"/> class.
-    /// </summary>
-    /// <param name="MaxMapCount">
-    ///     The maximum map count.
-    /// </param>
-    /// <param name="MaxDataCount">
-    ///     The maximum data count.
-    /// </param>
-    public record MlaConfigs(int MaxMapCount = 5, int MaxDataCount = 20);
+public partial class MlaPayloadModel
+{
+    internal AggregateAndInsertPayloadModel CastToAggregatePayload(
+        AggregateAndInsertPayloadModel.OperationTypes operationTypes
+    )
+    {
+        return new AggregateAndInsertPayloadModel()
+        {
+            Code = ConfAggMapCode,
+            Data = Data,
+        }.ChangeOperationType(operationType: operationTypes);
+    }
 
-    /// <summary>
-    ///     Validates the MlaPayloadModel according to specified business rules.
-    /// </summary>
-    /// <param name="configs">
-    ///     The configs.
-    /// </param>
-
-
-    public void Validate(GlobalConfigurationModel configs)
+    internal void Validate(GlobalConfigurationModel configs)
     {
         // Validate FlowCode
         if (string.IsNullOrWhiteSpace(FlowCode))

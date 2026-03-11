@@ -10,14 +10,8 @@ namespace IDC.AggrMapping.Utilities.Models;
 /// <summary>
 ///     Represents global configurations for the application.
 /// </summary>
-public class GlobalConfigurationModel : BaseModel<GlobalConfigurationModel>
+public partial class GlobalConfigurationModel : BaseModel<GlobalConfigurationModel>
 {
-    private const int DFLT_MAX_PRL_PROC = 20;
-    private const int DFLT_MAX_DEPTH = 3;
-    private const int DFLT_MAX_MAP_CNT = 5;
-    private const int DFLT_MAX_DATA_PLOAD = 20;
-    private const int DFLT_MAX_GRP_MAP_CNT = 5;
-
     /// <summary>
     ///     Gets or sets the maximum number of parallel processes.
     /// </summary>
@@ -47,27 +41,21 @@ public class GlobalConfigurationModel : BaseModel<GlobalConfigurationModel>
     /// </summary>
     [JsonPropertyName("maxGroupMapCount")]
     public int MaxGroupMapCount { get; set; } = DFLT_MAX_GRP_MAP_CNT;
+}
+
+public partial class GlobalConfigurationModel
+{
+    private const int DFLT_MAX_PRL_PROC = 20;
+    private const int DFLT_MAX_DEPTH = 3;
+    private const int DFLT_MAX_MAP_CNT = 5;
+    private const int DFLT_MAX_DATA_PLOAD = 20;
+    private const int DFLT_MAX_GRP_MAP_CNT = 5;
 
     /// <inheritdoc/>
     public override string ToString() =>
         $"MaxParallelProcess: {MaxParallelProcess}, MaxDepth: {MaxDepth}, MaxMapCount: {MaxMapCount}, MaxDataPayload: {MaxDataPayload}";
 
-    /// <summary>
-    ///     Initializes the global configurations from the database.
-    /// </summary>
-    /// <param name="pgHelper">
-    ///     The PostgreHelper instance.
-    /// </param>
-    /// <param name="caching">
-    ///     The caching instance.
-    /// </param>
-    /// <param name="cancellationToken">
-    ///     The cancellation token.
-    /// </param>
-    /// <returns>
-    ///     The initialized GlobalConfigurations instance.
-    /// </returns>
-    public async Task<GlobalConfigurationModel> InitFromDatabase(
+    internal async Task<GlobalConfigurationModel> InitFromDatabase(
         PostgreHelper pgHelper,
         Caching caching,
         CancellationToken cancellationToken = default

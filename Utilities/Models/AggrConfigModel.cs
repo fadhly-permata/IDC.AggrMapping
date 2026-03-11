@@ -1,4 +1,3 @@
-using System;
 using IDC.Utilities.Interfaces;
 
 namespace IDC.AggrMapping.Utilities.Models.SQLite;

@@ -424,3 +424,204 @@ grouped_mappings": [
         }
     ]
 }
+
+
+--------------
+Hasil Diskusi dengan Ali
+
+{
+    "agg01" : {
+        "avg_rating": "(sum(data[].RatingCode)/count(data[]))",
+        "best_rating": "(max(data[].RatingCode))",
+        "worst_rating": "(min(data[].RatingCode))",
+        "total_reviews": "(count(data[]))",
+        "best_rating_not_auto": "(max(data[].RatingCode~RatingSource != AUTO))",
+        "avg_pendapatan": "sum(data[].RatingCode)" <-- Ini contoh failure
+    },
+    "sample2" : {
+        "total": "(count(data[]))",
+        "balance": "(sum(data[].balance))",
+        "has_status_1": "bool(data[].status001 = 1)",
+        "first_data": "(data[].[0])",
+        "last_maturity": "(data[].[0]~ ~ratingDate desc)"
+    },
+    "sample3" : {
+        "total_acc_active" : "(count(Contracts.ContractList.Contract[]~ContractStatus = GrantedAndActivated)",
+        "worst_dpd_account" : "(max(Contracts.ContractList.Contract[].PastDueDays~ContractStatus = GrantedAndActivated))",
+        "worst_dpd_bill": "(Contracts.ContractList.Contract[].PastDueAmount.LocalValue~PastDueDays = #worst_dpd_account)",
+        "total_tagihan": "(sum(Contracts.ContractList.Contract[].PastDueAmount.LocalValue))",
+        "total_limit_cc": "(sum(Contracts.ContractList.Contract[].InitialTotalAmount.LocalValue~ContractType = CreditCard))",
+        "agreement_date_first": "(min(Contracts.ContractList.Contract[].InitialAgreementDate))",
+        "pernah_ada_writeoff": "(count(Contracts.ContractList.Contract[]~WorstPastDueDays > 180))",
+        "mob_loan_first": "(MONTH(TODAY #agreement_date_first^MM/dd/yyyy HH:mm:ss^))",
+        "test": "(#total_acc_active * #worst_dpd_bill)"
+    },
+    "sample4" : {
+        "installment": "(installment_detail[].installment_amount)",
+        "periode": "(loan_tenor)",
+        "outs_after_1st": "(installment_detail[].[0].outstanding_amount)",
+        "total_interest": "(sum(installment_detail[].interest_amount))",
+        "sum_pct": "(sum(installment_detail[].interest_amount) % 20)"
+    },
+    "sample5":{
+      "nama_lengkap": "(CONCAT("a", "b", "c"))"
+      "total_income": "(sum(data[].customer.emp.monthly_income))",
+      "hitung_umur": (today - data[].[0].customer.identity.birthdate),
+      "pick_first": (data[].[0])
+    },
+    "todo": {
+        "total_acc_active" : "(count(Contracts.ContractList.Contract[]~WorstPastDueDays >= 0 && (ContractStatus = GrantedAndActivated || WorstPastDueDays >= 0))"        
+    }
+}
+
+
+(sum(data[].paid) / sum(data[].total)) * 100
+a % b
+
+x = 4 + 5 * 4 / 2 - 3 <- hasil adalah 11 bukan 15
+x = 5 * 4 / 2 + 4
+
+x = a + b + c + d;
+
+x = (4 + (5 * 4))  / 2
+x = 14;
+x = 18;
+
+x = 4 + 5 * (4 / 2)
+
+[field]~[where]~[order]
+
+...
+WHERE
+    WorstPastDueDays >= 0 
+    AND 
+    (ContractStatus = GrantedAndActivated OR WorstPastDueDays >= 0))
+    0 = 0
+
+[sample output]
+{
+ "data": { 
+     "avg_rating": 4.5, 
+     "best_rating": 5, 
+     "worst_rating": "4", 
+     "total_reviews": 2, 
+      "best_rating_not_auto": 5 
+  }, 
+  "message": "API processing has been completed.", 
+  "status": "Success" 
+}
+
+tanda pagar digunakan untuk ambil value dari hasil aggregate sebelumnya
+
+
+
+-----
+
+Hasil diskusi dengan rian:
+
+{
+    "code": "agg01",
+    // private get set;
+    "op_type": "map_config",
+    "data": [
+        {
+            "customer": {
+                "identity": {
+                    "ktp": " 3175090909090001 ",
+                    "birthdate": "15-08-1990"
+                },
+                "personal": {
+                    "fullname": "andi pratama"
+                },
+                "contact": {
+                    "email": "ANDI.PRATAMA@EMAIL.COM ",
+                    "phone": "081234567890"
+                },
+                "employment": {
+                    "company_name": "PT Maju Mundur",
+                    "monthly_income": 15000000
+                }
+            }
+        },
+        {
+            "customer": {
+                "identity": {
+                    "ktp": " 3276010101010002 ",
+                    "birthdate": "01-01-1985"
+                },
+                "personal": {
+                    "fullname": "budi santoso"
+                },
+                "contact": {
+                    "email": "BUDI.SANTOSO@MAIL.COM ",
+                    "phone": "081298765432"
+                },
+                "employment": {
+                    "company_name": "PT Sejahtera Abadi",
+                    "monthly_income": 20000000
+                }
+            }
+        }
+    ]
+}
+
+---
+
+{
+    result: { hitung_umur: 20, total_income: 35
+    }
+}
+
+
+{
+    result: {
+        "pick_first": {
+            "customer": {
+                "identity": {
+                    "ktp": " 3175090909090001 ",
+                    "birthdate": "15-08-1990"
+                },
+                "personal": {
+                    "fullname": "andi pratama"
+                },
+                "contact": {
+                    "email": "ANDI.PRATAMA@EMAIL.COM ",
+                    "phone": "081234567890"
+                },
+                "employment": {
+                    "company_name": "PT Maju Mundur",
+                    "monthly_income": 15000000
+                }
+            },
+        hitung_umur: 36,
+        total_income: 35000
+        }
+    }
+
+
+    (sum(path) / sum(path)) * 100
+
+    haw = 1000
+    dis = 20%
+    hak = 1000 * 20 / 100
+    gaji - (gaji * 11 / 100)
+
+
+    haw = 1000
+    hju = 800
+    dis = (haw - hju ) / haw * 100
+
+    ppn = ?
+    gaji = 100
+    %pph = 11%
+
+
+{
+  "items": [
+    { "paid": 80, "total": 100 },
+    { "paid": 120, "total": 200 }
+  ],
+  "aggregations": {
+    "payment_percentage": "((sum(items[].paid) / sum(items[].total)) * 100)"
+  }
+}
