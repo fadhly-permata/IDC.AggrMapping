@@ -62,6 +62,9 @@ public class DemoHangfire(SystemLogging systemLogging, PostgreHelper pgHelper) :
     /// <param name="dataId">
     ///     Identifier for the data to process
     /// </param>
+    /// <param name="simulateProcessInSecond">
+    ///     Number of seconds to simulate data processing
+    /// </param>
     /// <returns>
     ///     APIResponse
     /// </returns>
@@ -92,6 +95,9 @@ public class DemoHangfire(SystemLogging systemLogging, PostgreHelper pgHelper) :
     /// </param>
     /// <param name="delayInSecond">
     ///     Delay before processing
+    /// </param>
+    /// <param name="simulateProcessInSecond">
+    ///     Number of seconds to simulate data processing
     /// </param>
     /// <returns>
     ///     APIResponse
@@ -127,11 +133,19 @@ public class DemoHangfire(SystemLogging systemLogging, PostgreHelper pgHelper) :
 public class DataProcessingJob(SystemLogging systemLogging)
 {
     /// <summary>
-    /// Processes data asynchronously
+    ///     Processes data asynchronously
     /// </summary>
-    /// <param name="dataId">Identifier for the data to process</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the asynchronous operation</returns>
+    /// <param name="dataId">
+    ///     Identifier for the data to process
+    /// </param>
+    /// <param name="simulateProcessInSecond">
+    ///     Number of seconds to simulate data processing
+    /// </param>
+    /// <param name="cancellationToken">
+    ///     Cancellation token
+    /// </param>
+    /// <returns>
+    ///     Task representing the asynchronous operation</returns>
     public async Task ProcessDataAsync(
         string dataId,
         int simulateProcessInSecond = 0,
@@ -155,6 +169,9 @@ public class DataProcessingJob(SystemLogging systemLogging)
     /// </summary>
     /// <param name="dataId">Identifier for the data to process</param>
     /// <param name="delay">Delay before processing</param>
+    /// <param name="simulateProcessInSecond">
+    ///     Number of seconds to simulate data processing
+    /// </param>
     public static void ScheduleDataProcessing(
         string dataId,
         TimeSpan delay,
@@ -171,6 +188,9 @@ public class DataProcessingJob(SystemLogging systemLogging)
     /// Enqueues a data processing job immediately
     /// </summary>
     /// <param name="dataId">Identifier for the data to process</param>
+    /// <param name="simulateProcessInSecond">
+    ///     Number of seconds to simulate data processing
+    /// </param>
     public static void EnqueueDataProcessing(string dataId, int simulateProcessInSecond = 0)
     {
         BackgroundJob.Enqueue<DataProcessingJob>(job =>

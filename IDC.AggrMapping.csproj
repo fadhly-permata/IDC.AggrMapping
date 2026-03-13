@@ -25,6 +25,7 @@
         <PackageReference Include="CouchbaseNetClient" />
         <PackageReference Include="Hangfire.AspNetCore" />
         <PackageReference Include="Hangfire.PostgreSql" />
+        <PackageReference Include="matheval" />
     </ItemGroup>
     <ItemGroup>
         <Reference Include="IDC.Utilities">

@@ -33,5 +33,6 @@
                         Version="1.8.23" />
         <PackageVersion Include="Hangfire.PostgreSql"
                         Version="1.21.1" />
+        <PackageVersion Include="matheval" Version="1.0.1" />
     </ItemGroup>
 </Project>

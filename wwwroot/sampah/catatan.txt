@@ -409,21 +409,33 @@ grouped_mappings": [
             "Installment_amortisasi": -1,
             "grace_periode": 0,
             "interest_calculation": "Flat",
-            "loan_amount": 10100000,
-            "loan_disbursed": 123456789,
-            "loan_tenor": 12
+            "sampling": {
+              "parent_data": {
+                "loan_amount": 10100000,
+                "loan_disbursed": 123456789,
+                "loan_tenor": 12,
+              }
+            }
         },
         {
             "installment_type": "equal",
             "Installment_amortisasi": -1,
             "grace_periode": 0,
             "interest_calculation": "Flat",
-            "loan_amount": 10100000,
-            "loan_disbursed": 111111111,
-            "loan_tenor": 12
+            "sampling": {
+              "parent_data": {
+                "loan_amount": 10100000,
+                "loan_disbursed": 111111111,
+                "loan_tenor": 12
+              }
+            }
         }
     ]
 }
+
+-----
+Diskusi rame2 jumat
+
 
 
 --------------
@@ -431,8 +443,8 @@ Hasil Diskusi dengan Ali
 
 {
     "agg01" : {
-        "avg_rating": "(sum(data[].RatingCode)/count(data[]))",
-        "best_rating": "(max(data[].RatingCode))",
+        "avg_rating": 5,
+        "best_rating": 5,
         "worst_rating": "(min(data[].RatingCode))",
         "total_reviews": "(count(data[]))",
         "best_rating_not_auto": "(max(data[].RatingCode~RatingSource != AUTO))",
@@ -625,3 +637,87 @@ Hasil diskusi dengan rian:
     "payment_percentage": "((sum(items[].paid) / sum(items[].total)) * 100)"
   }
 }
+
+====
+
+intinya gini, perhatikan struktur konfigurasi ini:
+new AggregateConfigurationModel
+        {
+            AggregateCode = aggregateCode,
+            ConfigurationItems = new JObject
+            {
+                // 1. Total gaji semua karyawan
+                { "total_salary", "SUM(Departments[].Employees[].Salary)" },
+                // 2. Rata-rata gaji karyawan aktif
+                { "avg_salary_active", "AVG(Departments[].Employees[].Salary~IsActive == true)" },
+                // 3. Jumlah karyawan per departemen
+                {
+                    "employee_count_per_dept",
+                    "COUNT(Departments[].Employees[]~ ~Departments[].Name)"
+                },
+                // 4. Total gaji per departemen
+                {
+                    "salary_per_dept",
+                    "SUM(Departments[].Employees[].Salary~ ~Departments[].Name)"
+                },
+                // 5. Gaji tertinggi
+                { "max_salary", "MAX(Departments[].Employees[].Salary)" },
+                // 6. Gaji terendah dari karyawan aktif
+                { "min_salary_active", "MIN(Departments[].Employees[].Salary~IsActive == true)" },
+                // 7. Jumlah karyawan dengan skill tertentu
+                { "count_java_devs", "COUNT(Departments[].Employees[]~Skills CONTAINS 'Java')" },
+                // 8. Rata-rata gaji per departemen untuk karyawan aktif
+                {
+                    "avg_salary_active_per_dept",
+                    "AVG(Departments[].Employees[].Salary~IsActive == true~Departments[].Name)"
+                },
+            },
+        };
+
+dan dengan contoh json ini:
+{
+  "code": "AGG01",
+  "data": [
+    {
+  "Company": "PT. Contoh",
+  "Year": 2023,
+  "Departments": [
+    {
+      "Id": 1,
+      "Name": "IT",
+      "Employees": [
+        {
+          "Id": 101,
+          "Name": "John Doe",
+          "Salary": 8000,
+          "Skills": ["C#", "SQL"],
+          "IsActive": true
+        },
+        {
+          "Id": 102,
+          "Name": "Jane Smith",
+          "Salary": 7000,
+          "Skills": ["Testing"],
+          "IsActive": false
+        }
+      ]
+    },
+    {
+      "Id": 2,
+      "Name": "HR",
+      "Employees": [
+        {
+          "Id": 201,
+          "Name": "Bob Johnson",
+          "Salary": 9000,
+          "Skills": ["Recruitment"],
+          "IsActive": true
+        }
+      ]
+    }
+  ]
+}
+  ]
+}
+
+

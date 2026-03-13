@@ -1,4 +1,3 @@
-using IDC.AggrMapping.Utilities.Models;
 using IDC.AggrMapping.Utilities.Models.AggregateEngine;
 using IDC.Utilities.Data;
 using IDC.Utilities.Extensions;
@@ -81,7 +80,34 @@ internal static class AggregateData
         return new AggregateConfigurationModel
         {
             AggregateCode = aggregateCode,
-            ConfigurationItems = [],
+            ConfigurationItems = new JObject
+            {
+                // 1. Total gaji semua karyawan
+                { "total_salary", "SUM(Departments[].Employees[].Salary)" },
+                // 2. Rata-rata gaji karyawan aktif
+                { "avg_salary_active", "AVG(Departments[].Employees[].Salary~IsActive == true)" },
+                // 3. Jumlah karyawan per departemen
+                {
+                    "employee_count_per_dept",
+                    "COUNT(Departments[].Employees[]~ ~Departments[].Name ASC)"
+                },
+                // 4. Total gaji per departemen
+                {
+                    "salary_per_dept",
+                    "SUM(Departments[].Employees[].Salary~ ~Departments[].Name ASC)"
+                },
+                // 5. Gaji tertinggi
+                { "max_salary", "MAX(Departments[].Employees[].Salary)" },
+                // 6. Gaji terendah dari karyawan aktif
+                { "min_salary_active", "MIN(Departments[].Employees[].Salary~IsActive == true)" },
+                // 7. Jumlah karyawan dengan skill tertentu
+                { "count_java_devs", "COUNT(Departments[].Employees[]~Skills CONTAINS 'Java')" },
+                // 8. Rata-rata gaji per departemen untuk karyawan aktif
+                {
+                    "avg_salary_active_per_dept",
+                    "AVG(Departments[].Employees[].Salary~IsActive == true~Departments[].Name ASC"
+                },
+            },
         };
     }
 }

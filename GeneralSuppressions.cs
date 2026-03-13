@@ -40,5 +40,13 @@
     checkId: "S2325",
     Scope = "namespaceanddescendants",
     Target = "~N:IDC.AggrMapping.Utilities.Models",
-    Justification = "SonarQube salah analisa struktur kode, jadi gak bisa di paksa nurut ke sonarqube"
+    Justification = "SonarQube salah analisa struktur kode, jadi gak bisa di paksa nurut."
+)]
+
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage(
+    category: "SonarAnalyzer",
+    checkId: "CA1822",
+    Scope = "namespaceanddescendants",
+    Target = "~N:IDC.AggrMapping.Utilities.Models",
+    Justification = "CodeAnalysis salah analisa struktur kode, jadi gak bisa di paksa nurut."
 )]
