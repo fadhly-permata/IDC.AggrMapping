@@ -1,6 +1,8 @@
 using System.Data;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
+using Hangfire.Common;
 using IDC.Utilities.Extensions;
 using Newtonsoft.Json.Linq;
 using org.matheval;
@@ -14,6 +16,7 @@ internal partial class JsonQueryEngine
     );
     private readonly Dictionary<string, object?> _processedResults = [];
     private readonly JObject _sourceData;
+    private readonly StringBuilder _sbLog = new();
 
     [GeneratedRegex(@"([\w#]+)\[\]\.([\w]+)(?:\[(\d+(?:\s*,\s*\d+)*)\])?")]
     private static partial Regex ArrayFieldQueryPatternRegex();
@@ -112,7 +115,10 @@ internal partial class JsonQueryEngine
         };
     }
 
-    public JObject AggregateProcessor(JObject? queryConfig)
+    public JObject AggregateProcessor(
+        JObject? queryConfig,
+        Action<JObject, StringBuilder>? callback = default
+    )
     {
         if (queryConfig == null)
             return [];
@@ -138,6 +144,9 @@ internal partial class JsonQueryEngine
                 result != null ? JToken.FromObject(o: result) : JValue.CreateNull()
             );
         }
+
+        callback?.Invoke(finalResult, _sbLog);
+
         return finalResult;
     }
 
@@ -272,28 +281,24 @@ internal partial class JsonQueryEngine
             if (c == ')')
             {
                 if (openParenCount <= 0)
-                    return (flowControl: false, value: default); // Keluar jika ketemu penutup fungsi induk (seperti MAX)
+                    // Return flowControl false to stop scanning
+                    return (flowControl: false, value: (openParenCount, hasReachedTilde));
                 openParenCount--;
             }
 
             if (c == '~')
                 hasReachedTilde = true;
 
-            // Jika sedang di dalam filter (~), JANGAN berhenti karena operator matematika atau koma
-            // Berhenti HANYA jika openParenCount 0 DAN ketemu karakter pemisah ekspresi luar
             if (!hasReachedTilde && openParenCount == 0 && "+-*/%^&, ".Contains(c))
-                return (flowControl: false, value: default);
+                return (flowControl: false, value: (openParenCount, hasReachedTilde));
 
-            // Jika sudah lewat tilde, kita lebih permisif, tapi tetap waspada terhadap penutup fungsi
             if (hasReachedTilde && openParenCount == 0 && "+-*/%^&,".Contains(c))
             {
-                // Cek apakah ini operator filter (seperti >= atau !=) atau operator matematika luar
-                // Cara simpel: jika setelahnya spasi/angka/huruf dan bukan bagian dari syntax SQL, break.
-                // Tapi untuk amannya, kita break jika ketemu operator luar yang bukan bagian dari filter string.
-                return (flowControl: false, value: default);
+                return (flowControl: false, value: (openParenCount, hasReachedTilde));
             }
 
-            return (flowControl: true, value: default);
+            // FIX: Pass the updated state back to the loop
+            return (flowControl: true, value: (openParenCount, hasReachedTilde));
         }
     }
 
@@ -456,10 +461,17 @@ internal partial class JsonQueryEngine
             return indices.Count > 1 ? indexedResults : indexedResults.FirstOrDefault();
         }
 
+        // 1. Handling Lookup Hashtag (#)
         if (queryStr.StartsWith(value: '#'))
-            return _processedResults.TryGetValue(key: queryStr[1..], value: out var val)
-                ? val
-                : null;
+        {
+            var key = queryStr[1..];
+            if (_processedResults.TryGetValue(key: key, value: out var val))
+                return val;
+
+            // Log if hashtag key is not found
+            LogWritter($"Lookup field '#{key}' not found in processed results.");
+            return null;
+        }
 
         var parts = queryStr.Split(separator: '~');
         var pathPart = parts[0];
@@ -468,14 +480,21 @@ internal partial class JsonQueryEngine
 
         var match = ArrayFieldQueryPatternRegex().Match(input: pathPart);
         if (!match.Success)
+        {
+            LogWritter($"Invalid query format or path not recognized: '{queryStr}'.");
             return null;
+        }
 
         var arrayName = match.Groups[1].Value;
         var fieldName = match.Groups[2].Value;
         var indexCsv = match.Groups[3].Value;
 
+        // 2. Handling Missing Array
         if (_sourceData[arrayName] is not JArray targetArray)
+        {
+            LogWritter($"Array '{arrayName}' not found in source JSON for query: '{queryStr}'.");
             return null;
+        }
 
         using var dt = CreateFullDataTable(array: targetArray);
         string sqlFilter = PrepareSqlFilter(filter: filterPart);
@@ -489,18 +508,32 @@ internal partial class JsonQueryEngine
                 )
                 .ToList();
 
+            // 3. Handling Specific Indices Lookup
             if (!string.IsNullOrEmpty(value: indexCsv))
             {
-                return ExtractItemsByIndices(indexCsv: indexCsv, projected: projected);
+                var result = ExtractItemsByIndices(indexCsv: indexCsv, projected: projected);
+                if (result == null)
+                {
+                    LogWritter(
+                        $"Indices [{indexCsv}] out of range or no data for field '{fieldName}' in query: '{queryStr}'."
+                    );
+                }
+                return result;
             }
 
+            // 4. Handling Empty Filter Result
             if (projected.Count == 0)
+            {
+                LogWritter($"No data matches the filter/criteria for query: '{queryStr}'.");
                 return null;
+            }
 
             return projected.Count == 1 ? projected[0] : projected;
         }
-        catch
+        catch (Exception ex)
         {
+            // 5. Handling SQL or Processing Error
+            LogWritter($"Error during data evaluation for '{queryStr}': {ex.Message}");
             return null;
         }
     }
@@ -570,5 +603,11 @@ internal partial class JsonQueryEngine
         }
 
         return (flowControl: true, value: null);
+    }
+
+    private void LogWritter(string text)
+    {
+        Console.WriteLine($"[JsonQueryEngine Log] {text}");
+        _sbLog.AppendLine(text);
     }
 }
