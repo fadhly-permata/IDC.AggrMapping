@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Text.Json.Serialization;
 using IDC.AggrMapping.Utilities.Data;
 using IDC.Utilities;
@@ -17,7 +18,7 @@ internal partial class AggregateConfigurationModel : BaseModel<AggregateConfigur
         JsonPropertyName(name: "aggregate_code"),
         Required(AllowEmptyStrings = false)
     ]
-    public string AggregateCode { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
 
     /// <summary>
     ///     Gets or sets the data.
@@ -26,12 +27,12 @@ internal partial class AggregateConfigurationModel : BaseModel<AggregateConfigur
         JsonProperty(propertyName: "configuration_items"),
         JsonPropertyName(name: "configuration_items")
     ]
-    public JObject ConfigurationItems { get; set; } = [];
+    public JObject Configurations { get; set; } = [];
 }
 
 internal partial class AggregateConfigurationModel
 {
-    public async Task<AggregateConfigurationModel> LoadDummy(
+    internal async Task<AggregateConfigurationModel> Load(
         string aggregateCode,
         PostgreHelper pgHelper,
         Caching caching,
@@ -40,15 +41,20 @@ internal partial class AggregateConfigurationModel
     {
         aggregateCode.ThrowIfNullOrWhitespace(nameof(aggregateCode));
 
-        var result = caching.GetOrSetAsync(
-            key: aggregateCode,
-            valueFactory: async () =>
-                await pgHelper.GetAggregateConfigurationAsync(
-                    aggregateCode: aggregateCode,
-                    cancellationToken: cancellationToken
-                ),
-            expirationRenewal: true
-        );
-        return this;
+        var result =
+            await caching.GetOrSetAsync(
+                key: aggregateCode,
+                valueFactory: async () =>
+                    await pgHelper.GetAggregateConfigurationAsync(
+                        aggregateCode: aggregateCode,
+                        cancellationToken: cancellationToken
+                    )
+                    ?? throw new DataException(
+                        $"Aggregate configuration '{aggregateCode}' not found."
+                    ),
+                expirationRenewal: true
+            ) ?? throw new DataException($"Aggregate configuration '{aggregateCode}' not found.");
+
+        return result;
     }
 }

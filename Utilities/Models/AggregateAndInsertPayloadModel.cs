@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Text.Json.Serialization;
-using IDC.Utilities;
-using IDC.Utilities.Data;
 using IDC.Utilities.Extensions;
 using IDC.Utilities.Interfaces;
 using Newtonsoft.Json;
@@ -28,7 +27,7 @@ public partial class AggregateAndInsertPayloadModel : BaseModel<AggregateAndInse
     ///     Gets or sets the data.
     /// </summary>
     [JsonProperty(propertyName: "data"), JsonPropertyName(name: "data")]
-    public JArray Data { get; set; } = [];
+    public object Data { get; set; } = new();
 }
 
 public partial class AggregateAndInsertPayloadModel
@@ -56,34 +55,19 @@ public partial class AggregateAndInsertPayloadModel
         return this;
     }
 
-    internal async Task Validate(
-        PostgreHelper pgHelper,
-        Caching caching,
-        CancellationToken cancellationToken = default
-    )
+    internal async Task Validate()
     {
         Code.ThrowIfNullOrWhitespace(paramName: nameof(Code));
         Data.ThrowIfNull(paramName: nameof(Data));
 
-        var gcm = await new GlobalConfigurationModel().InitFromDatabase(
-            pgHelper: pgHelper,
-            caching: caching,
-            cancellationToken: cancellationToken
-        );
+        if (Data is null)
+            throw new DataException("Data can not be null.");
 
-        if (Data.Count == 0)
-            throw new ArgumentException("Data cannot be empty.");
+        if (Data is JArray array && array.Count == 0)
+            throw new DataException("Data can not be empty.");
+        else if (Data is JObject obj && obj.Count == 0)
+            throw new DataException("Data can not be empty.");
 
-        if (Data.Count > gcm.MaxDataPayload)
-            throw new ArgumentException($"Data cannot have more than {gcm.MaxDataPayload} items.");
-
-        foreach (var dataItem in Data)
-        {
-            if (dataItem is null)
-                throw new ArgumentException("Each element on 'Data' cannot be null.");
-
-            if (dataItem is JObject jObject && !jObject.ValidateJsonDepth(maxDepth: gcm.MaxDepth))
-                throw new ArgumentException($"Data cannot have more than {gcm.MaxDepth} levels.");
-        }
+        await Task.CompletedTask;
     }
 }

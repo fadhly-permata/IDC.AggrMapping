@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Text.Json.Serialization;
-using IDC.AggrMapping.Utilities.Models.AggregateEngine;
 using IDC.Utilities.Interfaces;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -44,14 +44,30 @@ public partial class MlaPayloadModel : BaseModel<MlaPayloadModel>
 public partial class MlaPayloadModel
 {
     internal AggregateAndInsertPayloadModel CastToAggregatePayload(
-        AggregateAndInsertPayloadModel.OperationTypes operationTypes
+        AggregateAndInsertPayloadModel.OperationTypes operationTypes,
+        int dataIndex
     )
     {
-        return new AggregateAndInsertPayloadModel()
-        {
-            Code = ConfAggMapCode,
-            Data = Data,
-        }.ChangeOperationType(operationType: operationTypes);
+        if (Data == null || Data.Count == 0 || !Data.HasValues)
+            throw new DataException(
+                s: "Casting to AggregateAndInsertPayloadModel failed because Data is empty."
+            );
+
+        if (dataIndex < 0 || dataIndex >= Data.Count)
+            throw new DataException(
+                s: "Casting to AggregateAndInsertPayloadModel failed because dataIndex is out of range."
+            );
+
+        if (Data[dataIndex] is JObject elementOfData)
+            return new AggregateAndInsertPayloadModel()
+            {
+                Code = ConfAggMapCode,
+                Data = elementOfData,
+            }.ChangeOperationType(operationType: operationTypes);
+
+        throw new DataException(
+            s: "Casting to AggregateAndInsertPayloadModel failed because Data is not valid json object."
+        );
     }
 
     internal void Validate(GlobalConfigurationModel configs)
