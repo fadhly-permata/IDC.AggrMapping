@@ -1,6 +1,8 @@
 api untuk view/edit/detail itu api-nya sama
 
 api untuk view 
+url: /AggrMapping/AggregateConfig/detail
+method: post
 payload
 {
     "id" : "1", <- id yang dipilih "gcv_id"
@@ -39,6 +41,8 @@ return
 ---
 
 api copy
+url: /AggrMapping/AggregateConfig/copy
+method: post
 payload
 {
     "id" : "1", <- id yang dipilih "gcv_id"
@@ -52,6 +56,8 @@ return nya sama dengan detail (hasil copy-nya)
 ----
 
 api log
+url: /AggrMapping/AggregateConfig/log
+method: post 
 payload
 {
     "code": "1", <- gcv_code
@@ -74,6 +80,8 @@ return
 ----
 
 api untuk check/approve
+url: /AggrMapping/AggregateConfig/checkapprove
+method: post 
 payload
 {
     "id" : "1", <- id yang dipilih "gcv_id"
@@ -91,6 +99,8 @@ return
 --
 
 api untuk delete (soft delete aja)
+url: /AggrMapping/AggregateConfig/delete
+method: post 
 payload
 {
     "id" : "1", <- id yang dipilih "gcv_id"
@@ -105,6 +115,8 @@ return
 
 --
 api untuk rollback (based on logic SS di teams endang)
+url: /AggrMapping/AggregateConfig/rollback
+method: post 
 payload
 {
     "id" : "1", <- id yang dipilih "gcv_id"
@@ -118,7 +130,8 @@ return
 
 
 untuk api data grid halaman depan:
-url: 
+url: /AggrMapping/AggregateConfig/list/(active/version)
+method: get 
 parameter:
 {
     "grid_type": "active/version"
@@ -142,3 +155,4 @@ return
         "gcv_reject_date": "2026-03-22T14:00:00.000000", <- null
         "gcv_reject_position": "APPROVER" <- null
     }]
+
