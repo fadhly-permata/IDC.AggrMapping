@@ -24,7 +24,7 @@ internal class PostgreSql(PostgreHelper pgHelper)
             cancellationToken: cancellationToken
         );
 
-        string resultString = result?.CastToString() ?? "[]";
+        var resultString = result?.CastToString() ?? "[]";
         return JArray.Parse(string.IsNullOrWhiteSpace(resultString) ? "[]" : resultString);
     }
 
@@ -46,7 +46,7 @@ internal class PostgreSql(PostgreHelper pgHelper)
             cancellationToken: cancellationToken
         );
 
-        string resultString = result?.CastToString() ?? "[]";
+        var resultString = result?.CastToString() ?? "[]";
         return JArray.Parse(string.IsNullOrWhiteSpace(resultString) ? "[]" : resultString);
     }
 }

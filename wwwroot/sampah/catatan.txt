@@ -721,3 +721,15 @@ dan dengan contoh json ini:
 }
 
 
+ buatkan contoh implementasinya dong dengan minimal 5 contoh untuk masing-masing kriteria berikut:
+- Aggregasi
+- Operasi aritmatika
+- Filter data dengan/tanpa kombinasi AND, OR, LIKE, IN, NOT, =, >, <, =<, =>, !=
+- Ordering data
+- Kombinasi aggregasi + aritmatika + filter + order
+- Preseden operator
+- Preseden tanda kurung
+
+
+
+cek file  dan   sebagai referensi

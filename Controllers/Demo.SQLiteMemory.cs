@@ -69,7 +69,7 @@ public class DemoSQLiteMemory(
                 .Connect()
                 .ExecuteNonQuery(
                     query: $"CREATE TABLE IF NOT EXISTS {request.TableName} ({(string.Join(separator: ", ", values: request.Columns.Select(selector: col => $"{col.Key} {col.Value}")))})",
-                    affectedRows: out int affectedRows
+                    affectedRows: out var affectedRows
                 );
 
             return new APIResponseData<object>()
@@ -143,7 +143,7 @@ public class DemoSQLiteMemory(
                     .Connect()
                     .ExecuteNonQuery(
                         query: string.Join(separator: "; ", values: queries),
-                        affectedRows: out int affectedRows
+                        affectedRows: out var affectedRows
                     );
 
                 return new APIResponseData<object>()
@@ -187,7 +187,7 @@ public class DemoSQLiteMemory(
                 .Connect()
                 .ExecuteNonQuery(
                     query: $"DROP TABLE IF EXISTS {tableName}",
-                    affectedRows: out int affectedRows
+                    affectedRows: out var affectedRows
                 );
 
             return new APIResponseData<object>()

@@ -1,0 +1,144 @@
+api untuk view/edit/detail itu api-nya sama
+
+api untuk view 
+payload
+{
+    "id" : "1", <- id yang dipilih "gcv_id"
+}
+return
+{
+    isi tablenya per row berdasarkan "gcv_id" (object json)
+    contoh:
+
+     {
+        "gcv_id": 1025,
+        "gcv_code": "CONFIG_PAYMENT_GATEWAY",
+        "gcv_version": "24.001",
+        "gcv_status": "APPROVED",
+        "is_last_active": true,
+        "is_last_version": true,
+        "gcv_name": " _end_ng sukamti", 
+        "gcv_desc": "Konfigurasi utama untuk routing payment gateway jalur cepat.",
+        "gcv_data_applied": "PRODUCTION",
+        "gcv_type": "AGGREGATE_SETTING",
+        "gcv_json_list": "{\"items\": [\"QRIS\", \"VA_BCA\", \"OVO\"]}",
+        "gcv_json_condition": "{\"min_amount\": 10000}",
+        "gcv_config_final": "{\"timeout\": 30, \"retry\": 3}",
+        "gcv_is_deleted": false,
+        "gcv_created_by": "ENDANG",
+        "gcv_created_date": "2026-03-20T10:00:00.000000",
+        "gcv_updated_by": "ALI",
+        "gcv_updated_date": "2026-03-22T14:00:00.000000",
+        "gcv_reject_by": "ALI", <- null
+        "gcv_reject_note": "Data sudah sesuai standar", <- null
+        "gcv_reject_date": "2026-03-22T14:00:00.000000", <- null
+        "gcv_reject_position": "APPROVER" <- null
+    }
+}
+
+---
+
+api copy
+payload
+{
+    "id" : "1", <- id yang dipilih "gcv_id"
+    "name" : "test" <- gcv_name
+    "user": "crm_admin" <- gcv_created_by
+}
+
+return nya sama dengan detail (hasil copy-nya)
+
+
+----
+
+api log
+payload
+{
+    "code": "1", <- gcv_code
+}
+return
+{
+    name: "", <-- gcv_name
+    "desc": "", <-- gcv_desc
+    logs: [
+        {
+            "version": "", 
+            "status": "", 
+            "name": "", 
+            "desc": "", 
+            "date": "",
+        }
+    ]
+}
+
+----
+
+api untuk check/approve
+payload
+{
+    "id" : "1", <- id yang dipilih "gcv_id"
+    "action_step" : "CHECKER/APPROVER"
+    "action_type": "APPROVE/REJECT" ,
+    "user": "crm_admin",
+    "note": "note"
+}
+return
+{
+    "status": "FAILED/SUCCESS",
+    "message": ""
+}
+
+--
+
+api untuk delete (soft delete aja)
+payload
+{
+    "id" : "1", <- id yang dipilih "gcv_id"
+    "user": "crm_admin"
+}
+return
+{
+    "status": "FAILED/SUCCESS",
+    "message": ""
+}
+
+
+--
+api untuk rollback (based on logic SS di teams endang)
+payload
+{
+    "id" : "1", <- id yang dipilih "gcv_id"
+    "user": "crm_admin"
+}
+return
+{
+    "status": "FAILED/SUCCESS",
+    "message": ""
+}
+
+
+untuk api data grid halaman depan:
+url: 
+parameter:
+{
+    "grid_type": "active/version"
+}
+return
+    [{
+        "gcv_id": 1025,
+        "gcv_code": "CONFIG_PAYMENT_GATEWAY",
+        "gcv_version": "24.0001", -> jadi 1, 2, 3, 4
+        "gcv_status": "APPROVED",
+        "gcv_name": " _end_ng sukamti", 
+        "gcv_desc": "Konfigurasi utama untuk routing payment gateway jalur cepat.",
+        "gcv_data_applied": "PRODUCTION",
+        "gcv_type": "Request/Response",
+        "gcv_created_by": "ENDANG",
+        "gcv_created_date": "2026-03-20T10:00:00.000000",
+        "gcv_updated_by": "ALI",
+        "gcv_updated_date": "2026-03-22T14:00:00.000000",
+        "gcv_reject_by": "ALI", <- null
+        "gcv_reject_note": "Data sudah sesuai standar", <- null
+        "gcv_reject_date": "2026-03-22T14:00:00.000000", <- null
+        "gcv_reject_position": "APPROVER" <- null
+    }]

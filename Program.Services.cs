@@ -183,7 +183,7 @@ internal partial class Program
         if (_appConfigurations.Get(path: "DependencyInjection.PGSQL", defaultValue: false))
             builder.Services.AddScoped(implementationFactory: static _ =>
             {
-                string defaultConString = _appSettings.Get(
+                var defaultConString = _appSettings.Get(
                     path: "DefaultConStrings.IDCAggrMapping.PGSQL",
                     defaultValue: "ConnectionString_en"
                 );
@@ -230,7 +230,7 @@ internal partial class Program
         if (_appConfigurations.Get(path: "DependencyInjection.SQLite", defaultValue: false))
             builder.Services.AddScoped(implementationFactory: static _ =>
             {
-                string defaultConString = _appSettings.Get(
+                var defaultConString = _appSettings.Get(
                     path: "DefaultConStrings.IDCAggrMapping.SQLite",
                     defaultValue: "memory"
                 );
@@ -265,7 +265,7 @@ internal partial class Program
         if (_appConfigurations.Get(path: "DependencyInjection.MongoDB", defaultValue: false))
             builder.Services.AddScoped(static _ =>
             {
-                string defaultConString = _appSettings.Get(
+                var defaultConString = _appSettings.Get(
                     path: "DefaultConStrings.IDCAggrMapping.MongoDB",
                     defaultValue: "local"
                 );
@@ -290,7 +290,7 @@ internal partial class Program
 
     private static WebApplicationBuilder SetupHangfire(this WebApplicationBuilder builder)
     {
-        string defaultConString = _appSettings.Get(
+        var defaultConString = _appSettings.Get(
             path: "DefaultConStrings.IDCAggrMapping.PGSQL",
             defaultValue: "ConnectionString_en"
         );

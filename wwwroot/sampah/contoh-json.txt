@@ -1,0 +1,220 @@
+{
+  "code": "AGG_EXAMPLE",
+  "data": {
+    "employees": [
+      {
+        "id": 1,
+        "name": "John Doe",
+        "department": "IT",
+        "salary": 10000000,
+        "bonus": 2000000,
+        "isActive": true,
+        "joinDate": "2020-01-15"
+      },
+      {
+        "id": 2,
+        "name": "Jane Smith",
+        "department": "HR",
+        "salary": 9000000,
+        "bonus": 1500000,
+        "isActive": true,
+        "joinDate": "2019-05-20"
+      },
+      {
+        "id": 3,
+        "name": "Bob Johnson",
+        "department": "IT",
+        "salary": 8000000,
+        "bonus": 1000000,
+        "isActive": false,
+        "joinDate": "2021-03-10"
+      },
+      {
+        "id": 4,
+        "name": "Alice Williams",
+        "department": "Finance",
+        "salary": 12000000,
+        "bonus": 3000000,
+        "isActive": true,
+        "joinDate": "2018-11-05"
+      }
+    ],
+    "departments": [
+      {
+        "id": 1,
+        "name": "IT",
+        "budget": 50000000
+      },
+      {
+        "id": 2,
+        "name": "HR",
+        "budget": 30000000
+      },
+      {
+        "id": 3,
+        "name": "Finance",
+        "budget": 70000000
+      }
+    ]
+  }
+}
+
+
+-----
+
+// AggregationProcessor.cs
+using System.Globalization;
+using Newtonsoft.Json.Linq;
+using IDC.Utilities.SystemLogging;
+
+public static class AggregationProcessorExtensions
+{
+    public static JObject ProcessAggregations(this AggregateAndInsertPayloadModel model)
+    {
+        if (model?.Data == null)
+            return new JObject();
+
+        try
+        {
+            var processor = new AggregationProcessor(rootData: model.Data);
+            var result = new JObject();
+
+            // Contoh 1: Aggregasi sederhana
+            result["total_employees"] = processor.Evaluate("COUNT(employees[])");
+            result["max_salary"] = processor.Evaluate("MAX(employees[].salary)");
+            result["min_salary"] = processor.Evaluate("MIN(employees[].salary)");
+            result["avg_salary"] = processor.Evaluate("AVG(employees[].salary)");
+            result["sum_salary"] = processor.Evaluate("SUM(employees[].salary)");
+
+            // Contoh 2: Operasi aritmatika
+            result["total_compensation"] = processor.Evaluate("SUM(employees[].salary) + SUM(employees[].bonus)");
+            result["avg_bonus_percentage"] = processor.Evaluate("(AVG(employees[].bonus) / AVG(employees[].salary)) * 100");
+            result["salary_to_budget_ratio"] = processor.Evaluate("SUM(employees[].salary) / SUM(departments[].budget) * 100");
+            result["salary_difference"] = processor.Evaluate("MAX(employees[].salary) - MIN(employees[].salary)");
+            result["weighted_avg_salary"] = processor.Evaluate("(SUM(employees[].salary) * 0.3) + (AVG(employees[].salary) * 0.7)");
+
+            // Contoh 3: Filter data
+            result["active_employee_count"] = processor.Evaluate("COUNT(employees[]~isActive == true)");
+            result["it_employee_count"] = processor.Evaluate("COUNT(employees[]~department == 'IT')");
+            result["high_earners_count"] = processor.Evaluate("COUNT(employees[]~salary > 9000000)");
+            result["avg_salary_active"] = processor.Evaluate("AVG(employees[].salary~isActive == true)");
+            result["it_budget_usage"] = processor.Evaluate("SUM(employees[].salary~department == 'IT') / departments[].budget~name == 'IT'");
+
+            // Contoh 4: Ordering data
+            result["highest_paid_employee"] = processor.Evaluate("employees[].name~salary DESC~[0]");
+            result["second_highest_salary"] = processor.Evaluate("employees[].salary~salary DESC~[1]");
+            result["oldest_employee"] = processor.Evaluate("employees[].name~joinDate ASC~[0]");
+            result["department_avg_salary"] = processor.Evaluate("AVG(employees[].salary~ ~department)");
+            result["top_departments_by_budget"] = processor.Evaluate("departments[].name~budget DESC~[0:2]");
+
+            // Contoh 5: Kombinasi aggregasi + aritmatika + filter + order
+            result["avg_salary_active_it"] = processor.Evaluate(
+                "AVG(employees[].salary~department == 'IT' && isActive == true)");
+            result["bonus_to_salary_ratio"] = processor.Evaluate(
+                "(SUM(employees[].bonus~isActive == true) / SUM(employees[].salary~isActive == true)) * 100");
+            result["salary_rank"] = processor.Evaluate(
+                "employees[].name + ': ' + (salary - AVG(employees[].salary))~salary DESC");
+            result["department_cost_efficiency"] = processor.Evaluate(
+                "departments[].name + ': ' + (SUM(employees[].salary~department == #current.department) / departments[].budget) * 100~budget DESC");
+            result["employee_tenure_bonus"] = processor.Evaluate(
+                "employees[].name + ': ' + (bonus * (1 + (DATEDIFF(YEAR, joinDate, TODAY()) * 0.1)))~DATEDIFF(YEAR, joinDate, TODAY()) DESC");
+
+            // Contoh 6: Preseden operator
+            result["preseden1"] = processor.Evaluate("2 + 3 * 4"); // 14
+            result["preseden2"] = processor.Evaluate("(2 + 3) * 4"); // 20
+            result["preseden3"] = processor.Evaluate("10 - 5 - 2"); // 3
+            result["preseden4"] = processor.Evaluate("10 / 2 * 5"); // 25
+            result["preseden5"] = processor.Evaluate("10 / (2 * 5)"); // 1
+
+            // Contoh 7: Preseden tanda kurung
+            result["kurung1"] = processor.Evaluate("(MAX(employees[].salary) - MIN(employees[].salary)) / AVG(employees[].salary) * 100");
+            result["kurung2"] = processor.Evaluate("(SUM(employees[].salary) + SUM(employees[].bonus)) / COUNT(employees[])");
+            result["kurung3"] = processor.Evaluate("(employees[].salary[0] + employees[].salary[1]) * 0.5");
+            result["kurung4"] = processor.Evaluate("SUM(employees[].salary~department == 'IT') / (COUNT(employees[]~department == 'IT') * 1.0)");
+            result["kurung5"] = processor.Evaluate("(MAX(employees[].salary) - (AVG(employees[].salary) * 0.8)) / (MAX(employees[].salary) * 0.2)");
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            SystemLogging.LogError($"Error processing aggregations: {ex.Message}", ex);
+            return new JObject { ["error"] = ex.Message };
+        }
+    }
+}
+
+// Kelas AggregationProcessor yang diperluas
+public class AggregationProcessor
+{
+    private readonly JToken _rootData;
+
+    public AggregationProcessor(JToken rootData)
+    {
+        _rootData = rootData ?? throw new ArgumentNullException(nameof(rootData));
+    }
+
+    public JToken Evaluate(string expression)
+    {
+        // Implementasi sederhana evaluasi ekspresi
+        // Dalam implementasi nyata, ini akan menggunakan parser yang lebih canggih
+        return EvaluateExpression(expression, _rootData);
+    }
+
+    private JToken EvaluateExpression(string expression, JToken data)
+    {
+        // Implementasi parser dan evaluator ekspresi
+        // Ini adalah implementasi sederhana untuk keperluan contoh
+        if (string.IsNullOrWhiteSpace(expression))
+            return JValue.CreateNull();
+
+        // Implementasi nyata akan mem-parsing ekspresi dan mengevaluasinya
+        // Berikut adalah implementasi sederhana untuk keperluan demonstrasi
+        if (expression.StartsWith("COUNT("))
+        {
+            var path = expression.Substring(6, expression.Length - 7);
+            var tokens = SelectTokens(path, data);
+            return new JValue(tokens.Count());
+        }
+        else if (expression.StartsWith("SUM("))
+        {
+            var path = expression.Substring(4, expression.Length - 5);
+            var tokens = SelectTokens(path, data);
+            return new JValue(tokens.Sum(t => t.Value<decimal>()));
+        }
+        else if (expression.StartsWith("AVG("))
+        {
+            var path = expression.Substring(4, expression.Length - 5);
+            var tokens = SelectTokens(path, data);
+            var values = tokens.Select(t => t.Value<decimal>()).ToList();
+            return new JValue(values.Average());
+        }
+        else if (expression.StartsWith("MAX("))
+        {
+            var path = expression.Substring(4, expression.Length - 5);
+            var tokens = SelectTokens(path, data);
+            return new JValue(tokens.Max(t => t.Value<decimal>()));
+        }
+        else if (expression.StartsWith("MIN("))
+        {
+            var path = expression.Substring(4, expression.Length - 5);
+            var tokens = SelectTokens(path, data);
+            return new JValue(tokens.Min(t => t.Value<decimal>()));
+        }
+
+        // Implementasi lainnya untuk operasi aritmatika, filter, dll.
+        return JValue.CreateNull();
+    }
+
+    private IEnumerable<JToken> SelectTokens(string path, JToken data)
+    {
+        // Implementasi sederhana untuk memilih token berdasarkan path
+        try
+        {
+            return data.SelectTokens(path);
+        }
+        catch
+        {
+            return Enumerable.Empty<JToken>();
+        }
+    }
+}

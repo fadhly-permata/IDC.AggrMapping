@@ -24,62 +24,6 @@ namespace IDC.AggrMapping.Controllers;
 /// </param>
 /// <remarks>
 ///     This controller provides endpoints for aggregating data.
-///
-///     <example>
-///         <code>
-///             {
-/// "code": "AGG00042",
-/// "data": {
-///     "transactionId": "TXN-2023-11-15-001",
-///     "timestamp": "2023-11-15T10:30:00Z",
-///     "department": {
-///     "id": "DEPT-001",
-///     "name": "IT Department",
-///     "budget": 50000.0,
-///     "teams": [
-///         {
-///         "teamId": "TEAM-001",
-///         "name": "Development",
-///         "employees": [
-///             {
-///             "id": "EMP-001",
-///             "name": "John Doe",
-///             "salary": 7500.0,
-///             "hoursWorked": 160
-///             },
-///             {
-///             "id": "EMP-002",
-///             "name": "Jane Smith",
-///             "salary": 8000.0,
-///             "hoursWorked": 175
-///             }
-///         ],
-///         "projects": 5
-///         },
-///         {
-///         "teamId": "TEAM-002",
-///         "name": "QA",
-///         "employees": [
-///             {
-///             "id": "EMP-003",
-///             "name": "Bob Johnson",
-///             "salary": 6500.0,
-///             "hoursWorked": 150
-///             }
-///         ],
-///         "projects": 3
-///         }
-///     ]
-///     },
-///     "metrics": {
-///     "serverUptime": 99.98,
-///     "incidents": 2,
-///     "responseTime": 0.25
-///     }
-/// }
-/// }
-///         </code>
-///     </example>
 /// </remarks>
 [Route("AggrMapping/[controller]")]
 [ApiController]
@@ -100,7 +44,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     /// </returns>
     [Tags(tags: "Aggregation"), HttpPost("SingleAggregate")]
     public async Task<APIResponseData<object?>> SingleAggregate(
-        [FromBody] AggregateAndInsertPayloadModel payload,
+        [FromBody] InsertAndAggregatePayloadModel payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -108,7 +52,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
         {
             await payload
                 .ChangeOperationType(
-                    operationType: AggregateAndInsertPayloadModel.OperationTypes.Aggregation
+                    operationType: InsertAndAggregatePayloadModel.OperationTypes.Aggregation
                 )
                 .Validate();
 
@@ -119,12 +63,15 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
                 cancellationToken: cancellationToken
             );
 
-            if (cfg == null || cfg.Configurations == null || cfg.Configurations.Count == 0)
+            if (cfg.Configurations == null || cfg.Configurations.Count == 0)
                 throw new DataException($"Aggregate configuration '{payload.Code}' not found.");
 
             return new APIResponseData<object?>().ChangeData(
-                data: new JsonQueryEngine(jsonContext: (JObject)payload.Data).AggregateProcessor(
-                    queryConfig: cfg.Configurations
+                data: await new JsonQueryEngine(
+                    jsonContext: (JObject)payload.Data
+                ).AggregateProcessorAsync(
+                    queryConfig: cfg.Configurations,
+                    cancellationToken: cancellationToken
                 )
             );
         }
@@ -157,7 +104,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     /// </exception>
     [Tags(tags: "Aggregation"), HttpPost("MultipleAggregate")]
     public async Task<APIResponseData<object?>> MultipleAggregate(
-        [FromBody] AggregateAndInsertPayloadModel payload,
+        [FromBody] InsertAndAggregatePayloadModel payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -165,7 +112,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
         {
             await payload
                 .ChangeOperationType(
-                    operationType: AggregateAndInsertPayloadModel.OperationTypes.Aggregation
+                    operationType: InsertAndAggregatePayloadModel.OperationTypes.Aggregation
                 )
                 .Validate();
 
@@ -182,8 +129,9 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
             var result = new JArray();
             foreach (var item in (JArray)payload.Data)
                 result.Add(
-                    new JsonQueryEngine(jsonContext: (JObject)item).AggregateProcessor(
-                        queryConfig: cfg.Configurations
+                    await new JsonQueryEngine(jsonContext: (JObject)item).AggregateProcessorAsync(
+                        queryConfig: cfg.Configurations,
+                        cancellationToken: cancellationToken
                     )
                 );
 

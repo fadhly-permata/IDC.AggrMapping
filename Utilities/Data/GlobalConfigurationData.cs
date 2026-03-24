@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Hangfire.Common;
 using IDC.AggrMapping.Utilities.Models.AggregateEngine;
 using IDC.Utilities.Data;
@@ -99,5 +100,74 @@ internal static class AggregateData
             Code = aggregateCode,
             Configurations = JObject.Parse(data as string ?? "{}"),
         };
+    }
+}
+
+internal static class LoggingData
+{
+    internal enum ProcessType
+    {
+        ML_AGGREGATE,
+        ML_INSERTDATA,
+        ML_WF_OR_DF,
+    }
+
+    // p_batch_no character varying, p_aggr_code character varying, p_request json DEFAULT NULL::json, p_response json DEFAULT NULL::json, p_log text DEFAULT NULL::text
+    internal record DbLoggingModel(
+        string BatchCode,
+        ProcessType ProcessType,
+        string ProcessCode,
+        string Request,
+        string Response,
+        string Log
+    );
+
+    internal static async Task InsertAggregateProLogAsync(
+        this PostgreHelper pgHelper,
+        DbLoggingModel model,
+        CancellationToken cancellationToken = default
+    )
+    {
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        await pgHelper.ExecuteNonQueryAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "log_data_proc",
+                SPName = "upsert_multilayer_aggregate_proc",
+                Parameters =
+                [
+                    new PostgreHelper.SPParameter { Name = "p_batch_no", Value = model.BatchCode },
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_process_type",
+                        Value = model.ProcessType.ToString(),
+                    },
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_process_code",
+                        Value = model.ProcessCode,
+                    },
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_request",
+                        Value = model.Request,
+                        DataType = NpgsqlTypes.NpgsqlDbType.Json,
+                    },
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_response",
+                        Value = model.Response,
+                        DataType = NpgsqlTypes.NpgsqlDbType.Json,
+                    },
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_log",
+                        Value = model.Log,
+                        DataType = NpgsqlTypes.NpgsqlDbType.Text,
+                    },
+                ],
+            },
+            cancellationToken: cancellationToken
+        );
     }
 }

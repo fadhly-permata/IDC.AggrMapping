@@ -43,8 +43,8 @@ public partial class MlaPayloadModel : BaseModel<MlaPayloadModel>
 
 public partial class MlaPayloadModel
 {
-    internal AggregateAndInsertPayloadModel CastToAggregatePayload(
-        AggregateAndInsertPayloadModel.OperationTypes operationTypes,
+    internal InsertAndAggregatePayloadModel CastToAggregatePayload(
+        InsertAndAggregatePayloadModel.OperationTypes operationTypes,
         int dataIndex
     )
     {
@@ -59,7 +59,7 @@ public partial class MlaPayloadModel
             );
 
         if (Data[dataIndex] is JObject elementOfData)
-            return new AggregateAndInsertPayloadModel()
+            return new InsertAndAggregatePayloadModel()
             {
                 Code = ConfAggMapCode,
                 Data = elementOfData,

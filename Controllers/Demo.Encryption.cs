@@ -166,7 +166,7 @@ public class DemoEncryption(SystemLogging systemLogging) : ControllerBase
     {
         try
         {
-            (string sourceFile, string encryptedFileName, string encryptedFilePath) =
+            (var sourceFile, var encryptedFileName, var encryptedFilePath) =
                 await UploadProcess(
                     file: file,
                     isEncrypt: true,
@@ -244,7 +244,7 @@ public class DemoEncryption(SystemLogging systemLogging) : ControllerBase
     {
         try
         {
-            (string filePath, string encryptedFileName, string encryptedFilePath) =
+            (var filePath, var encryptedFileName, var encryptedFilePath) =
                 await UploadProcess(
                     file: file,
                     isEncrypt: false,
@@ -484,7 +484,7 @@ public class DemoEncryption(SystemLogging systemLogging) : ControllerBase
     {
         try
         {
-            (string sourceFile, string encryptedFileName, string encryptedFilePath) =
+            (var sourceFile, var encryptedFileName, var encryptedFilePath) =
                 await UploadProcess(
                     file: file,
                     isEncrypt: true,
@@ -567,7 +567,7 @@ public class DemoEncryption(SystemLogging systemLogging) : ControllerBase
     {
         try
         {
-            (string filePath, string encryptedFileName, string encryptedFilePath) =
+            (var filePath, var encryptedFileName, var encryptedFilePath) =
                 await UploadProcess(
                     file: file,
                     isEncrypt: false,

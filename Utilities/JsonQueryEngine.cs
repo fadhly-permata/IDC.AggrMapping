@@ -2,7 +2,6 @@ using System.Data;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using Hangfire.Common;
 using IDC.Utilities.Extensions;
 using Newtonsoft.Json.Linq;
 using org.matheval;
@@ -12,27 +11,35 @@ namespace IDC.AggrMapping.Utilities;
 internal partial class JsonQueryEngine
 {
     private readonly Dictionary<string, Func<string, string>> _customFuncRegistry = new(
-        StringComparer.OrdinalIgnoreCase
+        comparer: StringComparer.OrdinalIgnoreCase
     );
     private readonly Dictionary<string, object?> _processedResults = [];
     private readonly JObject _sourceData;
     private readonly StringBuilder _sbLog = new();
 
-    [GeneratedRegex(@"([\w#]+)\[\]\.([\w]+)(?:\[(\d+(?:\s*,\s*\d+)*)\])?")]
+    [GeneratedRegex(pattern: @"([\w#]+)\[\]\.([\w]+)(?:\[(\d+(?:\s*,\s*\d+)*)\])?")]
     private static partial Regex ArrayFieldQueryPatternRegex();
 
-    [GeneratedRegex(@"\bAVG\s*\(", RegexOptions.IgnoreCase, "en-ID")]
+    [GeneratedRegex(pattern: @"\bAVG\s*\(", options: RegexOptions.IgnoreCase, cultureName: "en-ID")]
     private static partial Regex AvgRegex();
 
-    [GeneratedRegex(@"\bCOUNT\(([^()]+)\)", RegexOptions.IgnoreCase, "en-ID")]
+    [GeneratedRegex(
+        pattern: @"\bCOUNT\(([^()]+)\)",
+        options: RegexOptions.IgnoreCase,
+        cultureName: "en-ID"
+    )]
     private static partial Regex CountFunctionRegex();
 
     // Untuk matching "COUNT(...)" sebagai keseluruhan string
-    [GeneratedRegex(@"^COUNT\((.+?)\)$", RegexOptions.IgnoreCase, "en-ID")]
+    [GeneratedRegex(
+        pattern: @"^COUNT\((.+?)\)$",
+        options: RegexOptions.IgnoreCase,
+        cultureName: "en-ID"
+    )]
     private static partial Regex FullCountExpressionRegex();
 
     // [GeneratedRegex(@"([\w]+\[\]|#[\w_]+)")]
-    [GeneratedRegex(@"([\w#]+\[\]|#[\w_]+)")]
+    [GeneratedRegex(pattern: @"([\w#]+\[\]|#[\w_]+)")]
     private static partial Regex SubQueryPatternRegex();
 
     /// <summary>
@@ -78,17 +85,18 @@ internal partial class JsonQueryEngine
     private void RegisterCustomFunctions()
     {
         // Handler untuk VAL(query) -> Mengambil nilai tunggal (index 0)
-        _customFuncRegistry["val"] = (inner) =>
+        _customFuncRegistry[key: "val"] = string (inner) =>
         {
             var evaluated = EvaluateQuery(queryStr: inner);
-            var scalar =
-                evaluated is System.Collections.IList list && list.Count > 0 ? list[0] : evaluated;
+            var scalar = evaluated is System.Collections.IList { Count: > 0 } list
+                ? list[index: 0]
+                : evaluated;
 
             return Convert.ToString(value: scalar ?? 0, provider: CultureInfo.InvariantCulture)!;
         };
 
         // Handler untuk PCT(awal, akhir) -> Konversi ke formula (A-B)/A * 100
-        _customFuncRegistry["pct"] = (args) =>
+        _customFuncRegistry[key: "pct"] = string (args) =>
         {
             // Memecah argumen dengan pengamanan (mengabaikan koma di dalam kurung/filter)
             var parts = SplitArgumentsIgnoreBrackets(args: args);
@@ -98,7 +106,7 @@ internal partial class JsonQueryEngine
 
             // Evaluasi rekursif (mendukung nesting fungsi di dalam PCT)
             var sAwal = Convert.ToString(
-                value: ProcessMathOrQuery(queryStr: parts[0]) ?? 0,
+                value: ProcessMathOrQuery(queryStr: parts[index: 0]) ?? 0,
                 provider: CultureInfo.InvariantCulture
             )!;
 
@@ -107,7 +115,7 @@ internal partial class JsonQueryEngine
                 return "0";
 
             var sAkhir = Convert.ToString(
-                value: ProcessMathOrQuery(queryStr: parts[1]) ?? 0,
+                value: ProcessMathOrQuery(queryStr: parts[index: 1]) ?? 0,
                 provider: CultureInfo.InvariantCulture
             )!;
 
@@ -115,20 +123,22 @@ internal partial class JsonQueryEngine
         };
     }
 
-    public JObject AggregateProcessor(
+    public async Task<JObject> AggregateProcessorAsync(
         JObject? queryConfig,
-        Action<JObject, StringBuilder>? callback = default
+        CancellationToken cancellationToken = default
     )
     {
         if (queryConfig == null)
             return [];
 
         JObject finalResult = [];
+        var tasks = new Dictionary<string, Task<object?>>();
 
+        // Start all queries in parallel
         foreach (var property in queryConfig.Properties())
         {
             var queryKey = property.Name;
-            var queryString = property.Value?.ToString();
+            var queryString = property.Value.ToString();
 
             if (string.IsNullOrEmpty(value: queryString))
             {
@@ -136,16 +146,28 @@ internal partial class JsonQueryEngine
                 continue;
             }
 
-            object? result = ProcessMathOrQuery(queryStr: queryString);
-            _processedResults[queryKey] = result;
-
-            finalResult.Add(
-                queryKey,
-                result != null ? JToken.FromObject(o: result) : JValue.CreateNull()
+            tasks[key: queryKey] = Task.Run(
+                function: object? () => ProcessMathOrQuery(queryStr: queryString),
+                cancellationToken: cancellationToken
             );
         }
 
-        callback?.Invoke(finalResult, _sbLog);
+        // Wait for all tasks to complete
+        var results = await Task.WhenAll(tasks: tasks.Values);
+        var keys = tasks.Keys.ToArray();
+
+        // Process results
+        for (var i = 0; i < results.Length; i++)
+        {
+            var queryKey = keys[i];
+            var result = results[i];
+
+            _processedResults[key: queryKey] = result;
+            finalResult.Add(
+                propertyName: queryKey,
+                value: result != null ? JToken.FromObject(o: result) : JValue.CreateNull()
+            );
+        }
 
         return finalResult;
     }
@@ -170,8 +192,8 @@ internal partial class JsonQueryEngine
 
         var properties = array
             .Children<JObject>()
-            .SelectMany(selector: o => o.Properties())
-            .Select(selector: p => p.Name)
+            .SelectMany(selector: IEnumerable<JProperty> (o) => o.Properties())
+            .Select(selector: string (p) => p.Name)
             .Distinct();
 
         foreach (var propName in properties)
@@ -180,8 +202,8 @@ internal partial class JsonQueryEngine
                 columnName: propName,
                 type: array
                     .Children<JObject>()
-                    .Select(selector: o => o[propName])
-                    .FirstOrDefault(predicate: v => v != null && v.Type != JTokenType.Null)
+                    .Select(selector: JToken? (o) => o[propertyName: propName])
+                    .FirstOrDefault(predicate: bool (v) => v != null && v.Type != JTokenType.Null)
                     ?.Type switch
                 {
                     JTokenType.Integer or JTokenType.Float => typeof(double),
@@ -192,15 +214,15 @@ internal partial class JsonQueryEngine
             );
         }
 
-        foreach (JObject obj in array.Children<JObject>())
+        foreach (var obj in array.Children<JObject>())
         {
-            DataRow row = dt.NewRow();
+            var row = dt.NewRow();
 
             foreach (DataColumn col in dt.Columns)
             {
-                var val = obj[col.ColumnName];
+                var val = obj[propertyName: col.ColumnName];
 
-                row[col.ColumnName] =
+                row[columnName: col.ColumnName] =
                     (val == null || val.Type == JTokenType.Null)
                         ? DBNull.Value
                         : val.ToObject(objectType: col.DataType);
@@ -217,10 +239,10 @@ internal partial class JsonQueryEngine
         templateExpr = CountFunctionRegex()
             .Replace(
                 input: templateExpr,
-                evaluator: static m =>
-                    m.Groups[1]
+                evaluator: static string (m) =>
+                    m.Groups[groupnum: 1]
                         .Value.Split(separator: ',')
-                        .Count(predicate: static s => !string.IsNullOrWhiteSpace(value: s))
+                        .Count(predicate: static bool (s) => !string.IsNullOrWhiteSpace(value: s))
                         .ToString()
             );
         return templateExpr;
@@ -230,75 +252,107 @@ internal partial class JsonQueryEngine
     {
         foreach (Match m in SubQueryPatternRegex().Matches(input: templateExpr))
         {
-            if (m.Value.StartsWith('#'))
+            if (m.Value.StartsWith(value: '#'))
             {
-                if (!subQueries.Contains(m.Value))
-                    subQueries.Add(m.Value);
+                if (!subQueries.Contains(item: m.Value))
+                    subQueries.Add(item: m.Value);
                 continue;
             }
 
-            int startIndex = m.Index;
-            int currentIndex = startIndex + m.Length;
-            int openParenCount = 0;
-            bool hasReachedTilde = false;
+            var startIndex = m.Index;
+            var currentIndex = startIndex + m.Length;
+
+            // Initialization of scanning states
+            var openParenCount = 0;
+            var hasReachedTilde = false;
+            var inQuote = false; // New state to track if we are inside a string literal
 
             while (currentIndex < templateExpr.Length)
             {
-                (bool flowControl, (openParenCount, hasReachedTilde)) =
-                    HandleCharInFilterExpression(
-                        templateExpr,
-                        currentIndex,
-                        openParenCount,
-                        hasReachedTilde
-                    );
-                if (!flowControl)
-                {
+                // Process the current character and update states
+                var result = HandleCharInFilterExpression(
+                    templateExpr: templateExpr,
+                    currentIndex: currentIndex,
+                    openParenCount: openParenCount,
+                    hasReachedTilde: hasReachedTilde,
+                    inQuote: inQuote
+                );
+
+                if (!result.flowControl)
                     break;
-                }
+
+                // Update local states for the next iteration
+                openParenCount = result.value.openParenCount;
+                hasReachedTilde = result.value.hasReachedTilde;
+                inQuote = result.value.inQuote;
 
                 currentIndex++;
             }
 
-            string subQuery = templateExpr[startIndex..currentIndex].Trim();
-            if (!subQueries.Contains(subQuery))
-                subQueries.Add(subQuery);
+            var subQuery = templateExpr[startIndex..currentIndex].Trim();
+            if (!subQueries.Contains(item: subQuery))
+                subQueries.Add(item: subQuery);
         }
 
+        return;
+
+        // Helper function to determine scanning flow and state updates
         static (
             bool flowControl,
-            (int openParenCount, bool hasReachedTilde) value
+            (int openParenCount, bool hasReachedTilde, bool inQuote) value
         ) HandleCharInFilterExpression(
             string templateExpr,
             int currentIndex,
             int openParenCount,
-            bool hasReachedTilde
+            bool hasReachedTilde,
+            bool inQuote
         )
         {
-            char c = templateExpr[currentIndex];
+            var c = templateExpr[index: currentIndex];
 
-            if (c == '(')
-                openParenCount++;
-            if (c == ')')
+            // Toggle quote state when a single quote is encountered
+            if (c == '\'')
             {
-                if (openParenCount <= 0)
-                    // Return flowControl false to stop scanning
-                    return (flowControl: false, value: (openParenCount, hasReachedTilde));
-                openParenCount--;
+                inQuote = !inQuote;
+                return (flowControl: true, value: (openParenCount, hasReachedTilde, inQuote));
             }
 
-            if (c == '~')
-                hasReachedTilde = true;
-
-            if (!hasReachedTilde && openParenCount == 0 && "+-*/%^&, ".Contains(c))
-                return (flowControl: false, value: (openParenCount, hasReachedTilde));
-
-            if (hasReachedTilde && openParenCount == 0 && "+-*/%^&,".Contains(c))
+            // If we are inside a quote, ignore all breaking logic and continue scanning
+            if (inQuote)
             {
-                return (flowControl: false, value: (openParenCount, hasReachedTilde));
+                return (flowControl: true, value: (openParenCount, hasReachedTilde, inQuote));
             }
 
-            // FIX: Pass the updated state back to the loop
-            return (flowControl: true, value: (openParenCount, hasReachedTilde));
+            switch (c)
+            {
+                // Parentheses tracking for nested expressions
+                case '(':
+                    openParenCount++;
+                    break;
+                case ')' when openParenCount <= 0:
+                    return (flowControl: false, value: (openParenCount, hasReachedTilde, inQuote));
+                case ')':
+                    openParenCount--;
+                    break;
+                // Tilde marker for the start of filter/sort section
+                case '~':
+                    hasReachedTilde = true;
+                    break;
+            }
+
+            return hasReachedTilde switch
+            {
+                // Breaking logic: stop if we hit a delimiter while not inside a quote/parentheses
+                false when openParenCount == 0 && "+-*/%^&, ".Contains(value: c) => (
+                    flowControl: false,
+                    value: (openParenCount, hasReachedTilde, inQuote)
+                ),
+                true when openParenCount == 0 && "+-*/%^&,".Contains(value: c) => (
+                    flowControl: false,
+                    value: (openParenCount, hasReachedTilde, inQuote)
+                ),
+                _ => (flowControl: true, value: (openParenCount, hasReachedTilde, inQuote)),
+            };
         }
     }
 
@@ -308,14 +362,15 @@ internal partial class JsonQueryEngine
         var counter = 1;
 
         while (counter > 0 && closePos < text.Length)
-        {
-            var c = text[closePos++];
-
-            if (c == '(')
-                counter++;
-            else if (c == ')')
-                counter--;
-        }
+            switch (text[index: closePos++])
+            {
+                case '(':
+                    counter++;
+                    break;
+                case ')':
+                    counter--;
+                    break;
+            }
 
         return counter == 0 ? closePos - 1 : -1;
     }
@@ -336,13 +391,11 @@ internal partial class JsonQueryEngine
                 { "=<", "<=" },
             }
         )
-        {
             filter = filter.Replace(
                 oldValue: oldValue,
                 newValue: newValue,
                 comparisonType: StringComparison.Ordinal
             );
-        }
 
         return filter;
     }
@@ -353,18 +406,20 @@ internal partial class JsonQueryEngine
         var bracketCount = 0;
         var lastIndex = 0;
 
-        for (int i = 0; i < args.Length; i++)
-        {
-            if (args[i] == '(')
-                bracketCount++;
-            else if (args[i] == ')')
-                bracketCount--;
-            else if (args[i] == ',' && bracketCount == 0)
+        for (var i = 0; i < args.Length; i++)
+            switch (args[index: i])
             {
-                result.Add(item: args[lastIndex..i].Trim());
-                lastIndex = i + 1;
+                case '(':
+                    bracketCount++;
+                    break;
+                case ')':
+                    bracketCount--;
+                    break;
+                case ',' when bracketCount == 0:
+                    result.Add(item: args[lastIndex..i].Trim());
+                    lastIndex = i + 1;
+                    break;
             }
-        }
 
         result.Add(item: args[lastIndex..].Trim());
         return result;
@@ -398,7 +453,7 @@ internal partial class JsonQueryEngine
                     .Remove(startIndex: match.Index, count: endIdx + 1 - match.Index)
                     .Insert(
                         startIndex: match.Index,
-                        value: func.Value(templateExpr[startIdx..endIdx])
+                        value: func.Value(arg: templateExpr[startIdx..endIdx])
                     );
             }
         }
@@ -413,7 +468,9 @@ internal partial class JsonQueryEngine
         List<string> subQueries
     )
     {
-        foreach (var subQuery in subQueries.OrderByDescending(keySelector: static s => s.Length))
+        foreach (
+            var subQuery in subQueries.OrderByDescending(keySelector: static int (s) => s.Length)
+        )
         {
             var val = EvaluateQuery(queryStr: subQuery);
             if (val is System.Collections.IList list)
@@ -443,24 +500,6 @@ internal partial class JsonQueryEngine
 
     private object? EvaluateQuery(string queryStr)
     {
-        static object? ExtractItemsByIndices(string indexCsv, List<object?> projected)
-        {
-            var indexedResults = new List<object?>();
-            var indices = indexCsv
-                .Split(separator: ',')
-                .Select(selector: s => int.Parse(s: s.Trim()))
-                .ToList();
-
-            foreach (var i in indices)
-                if (i >= 0 && i < projected.Count)
-                    indexedResults.Add(item: projected[i]);
-
-            if (indexedResults.Count == 0)
-                return null;
-
-            return indices.Count > 1 ? indexedResults : indexedResults.FirstOrDefault();
-        }
-
         // 1. Handling Lookup Hashtag (#)
         if (queryStr.StartsWith(value: '#'))
         {
@@ -469,7 +508,7 @@ internal partial class JsonQueryEngine
                 return val;
 
             // Log if hashtag key is not found
-            LogWritter($"Lookup field '#{key}' not found in processed results.");
+            LogWritter(text: $"Lookup field '#{key}' not found in processed results.");
             return null;
         }
 
@@ -481,60 +520,94 @@ internal partial class JsonQueryEngine
         var match = ArrayFieldQueryPatternRegex().Match(input: pathPart);
         if (!match.Success)
         {
-            LogWritter($"Invalid query format or path not recognized: '{queryStr}'.");
+            LogWritter(text: $"Invalid query format or path not recognized: '{queryStr}'.");
             return null;
         }
 
-        var arrayName = match.Groups[1].Value;
-        var fieldName = match.Groups[2].Value;
-        var indexCsv = match.Groups[3].Value;
+        var arrayName = match.Groups[groupnum: 1].Value;
+        var fieldName = match.Groups[groupnum: 2].Value;
+        var indexCsv = match.Groups[groupnum: 3].Value;
 
         // 2. Handling Missing Array
-        if (_sourceData[arrayName] is not JArray targetArray)
-        {
-            LogWritter($"Array '{arrayName}' not found in source JSON for query: '{queryStr}'.");
-            return null;
-        }
+        if (_sourceData[propertyName: arrayName] is JArray targetArray)
+            return Projected(
+                queryStr: queryStr,
+                targetArray: targetArray,
+                filterPart: filterPart,
+                sortPart: sortPart,
+                fieldName: fieldName,
+                s: indexCsv
+            );
 
+        LogWritter(text: $"Array '{arrayName}' not found in source JSON for query: '{queryStr}'.");
+        return null;
+    }
+
+    private object? Projected(
+        string queryStr,
+        JArray targetArray,
+        string? filterPart,
+        string? sortPart,
+        string fieldName,
+        string s
+    )
+    {
         using var dt = CreateFullDataTable(array: targetArray);
-        string sqlFilter = PrepareSqlFilter(filter: filterPart);
-        string sqlSort = (sortPart ?? "").Replace(oldValue: "==", newValue: "=");
+        var sqlFilter = PrepareSqlFilter(filter: filterPart);
+        var sqlSort = (sortPart ?? "").Replace(oldValue: "==", newValue: "=");
 
         try
         {
             var rows = dt.Select(filterExpression: sqlFilter, sort: sqlSort);
-            var projected = rows.Select(selector: r =>
-                    r[fieldName] == DBNull.Value ? null : r[fieldName]
+            var projected = rows.Select(
+                    selector: object? (r) =>
+                        r[columnName: fieldName] == DBNull.Value ? null : r[columnName: fieldName]
                 )
                 .ToList();
 
             // 3. Handling Specific Indices Lookup
-            if (!string.IsNullOrEmpty(value: indexCsv))
+            if (!string.IsNullOrEmpty(value: s))
             {
-                var result = ExtractItemsByIndices(indexCsv: indexCsv, projected: projected);
+                var result = ExtractItemsByIndices(indexCsv: s, projected: projected);
                 if (result == null)
-                {
                     LogWritter(
-                        $"Indices [{indexCsv}] out of range or no data for field '{fieldName}' in query: '{queryStr}'."
+                        text: $"Indices [{s}] out of range or no data for field '{fieldName}' in query: '{queryStr}'."
                     );
-                }
+
                 return result;
             }
 
             // 4. Handling Empty Filter Result
-            if (projected.Count == 0)
-            {
-                LogWritter($"No data matches the filter/criteria for query: '{queryStr}'.");
-                return null;
-            }
+            if (projected.Count != 0)
+                return projected.Count == 1 ? projected[index: 0] : projected;
 
-            return projected.Count == 1 ? projected[0] : projected;
+            LogWritter(text: $"No data matches the filter/criteria for query: '{queryStr}'.");
+            return null;
         }
         catch (Exception ex)
         {
             // 5. Handling SQL or Processing Error
-            LogWritter($"Error during data evaluation for '{queryStr}': {ex.Message}");
+            LogWritter(text: $"Error during data evaluation for '{queryStr}': {ex.Message}");
             return null;
+        }
+
+        static object? ExtractItemsByIndices(string indexCsv, List<object?> projected)
+        {
+            var indices = indexCsv
+                .Split(separator: ',')
+                .Select(selector: int (s) => int.Parse(s: s.Trim()))
+                .ToList();
+
+            var indexedResults = (
+                from i in indices
+                where i >= 0 && i < projected.Count
+                select projected[index: i]
+            ).ToList();
+
+            if (indexedResults.Count == 0)
+                return null;
+
+            return indices.Count > 1 ? indexedResults : indexedResults.FirstOrDefault();
         }
     }
 
@@ -549,7 +622,7 @@ internal partial class JsonQueryEngine
 
         // Handling Khusus COUNT tunggal di level root
         // disini perlu handling khusus karna mathEval tidak memiliki fungsi COUNT
-        (bool flowControl, object? value) = TryHandleRootCount(templateExpr: templateExpr);
+        var (flowControl, value) = TryHandleRootCount(templateExpr: templateExpr);
         if (!flowControl)
             return value;
 
@@ -588,26 +661,23 @@ internal partial class JsonQueryEngine
     {
         var countMatch = FullCountExpressionRegex().Match(input: templateExpr);
         if (
-            countMatch.Success
-            && !templateExpr.Contains(value: '+')
-            && !templateExpr.Contains(value: '-')
-            && !templateExpr.Contains(value: '*')
+            !countMatch.Success
+            || templateExpr.Contains(value: '+')
+            || templateExpr.Contains(value: '-')
+            || templateExpr.Contains(value: '*')
         )
-        {
-            var val = EvaluateQuery(queryStr: countMatch.Groups[1].Value);
+            return (flowControl: true, value: null);
 
-            if (val is System.Collections.IList list)
-                return (flowControl: false, value: (double)list.Count);
+        var val = EvaluateQuery(queryStr: countMatch.Groups[groupnum: 1].Value);
+        if (val is System.Collections.IList list)
+            return (flowControl: false, value: (double)list.Count);
 
-            return (flowControl: false, value: val != null ? 1.0 : 0.0);
-        }
-
-        return (flowControl: true, value: null);
+        return (flowControl: false, value: val != null ? 1.0 : 0.0);
     }
 
     private void LogWritter(string text)
     {
-        Console.WriteLine($"[JsonQueryEngine Log] {text}");
-        _sbLog.AppendLine(text);
+        Console.WriteLine(value: $"[JsonQueryEngine Log] {text}");
+        _sbLog.AppendLine(value: text);
     }
 }
