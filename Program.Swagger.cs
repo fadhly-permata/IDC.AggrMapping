@@ -14,7 +14,7 @@ internal partial class Program
             return builder;
 
         builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen(options =>
+        builder.Services.AddSwaggerGen(setupAction: static options =>
         {
             var openApiInfo = new OpenApiInfo
             {
@@ -26,10 +26,10 @@ internal partial class Program
                     path: "SwaggerConfig.OpenApiInfo.Description"
                 )!,
                 TermsOfService = new Uri(
-                    _appConfigurations.Get<string>(
+                    uriString: _appConfigurations.Get<string>(
                         path: "SwaggerConfig.OpenApiInfo.TermsOfService"
                     )!,
-                    UriKind.Relative
+                    uriKind: UriKind.Relative
                 ),
                 Contact = new OpenApiContact
                 {
@@ -40,7 +40,7 @@ internal partial class Program
                         path: "SwaggerConfig.OpenApiInfo.Contact.Email"
                     )!,
                     Url = new Uri(
-                        _appConfigurations.Get<string>(
+                        uriString: _appConfigurations.Get<string>(
                             path: "SwaggerConfig.OpenApiInfo.Contact.Url"
                         )!
                     ),
@@ -51,19 +51,19 @@ internal partial class Program
                         path: "SwaggerConfig.OpenApiInfo.License.Name"
                     )!,
                     Url = new Uri(
-                        _appConfigurations.Get<string>(
+                        uriString: _appConfigurations.Get<string>(
                             path: "SwaggerConfig.OpenApiInfo.License.Url"
                         )!,
-                        UriKind.Relative
+                        uriKind: UriKind.Relative
                     ),
                 },
             };
 
             // Tambahkan resolver untuk menangani konflik action
-            options.ResolveConflictingActions(apiDescriptions =>
+            options.ResolveConflictingActions(resolver: static apiDescriptions =>
             {
                 // Prioritaskan controller dari namespace IDC.AggrMapping
-                return apiDescriptions.FirstOrDefault(api =>
+                return apiDescriptions.FirstOrDefault(predicate: static api =>
                         api.ActionDescriptor.DisplayName?.Contains(
                             value: _appConfigurations.Get(
                                 path: "AppName",
@@ -88,21 +88,21 @@ internal partial class Program
             );
 
             // Konfigurasi untuk mengelompokkan berdasarkan Tags
-            options.TagActionsBy(api =>
+            options.TagActionsBy(tagsSelector: static api =>
                 [
                     .. api
                         .ActionDescriptor.EndpointMetadata.OfType<TagsAttribute>()
-                        .SelectMany(attr => attr.Tags)
+                        .SelectMany(selector: static attr => attr.Tags)
                         .Distinct(),
                 ]
             );
 
             // Urutkan Tags
-            options.OrderActionsBy(apiDesc => apiDesc.GroupName);
+            options.OrderActionsBy(sortKeySelector: static apiDesc => apiDesc.GroupName);
 
             options.AddSecurityDefinition(
-                "ApiKey",
-                new OpenApiSecurityScheme
+                name: "ApiKey",
+                securityScheme: new OpenApiSecurityScheme
                 {
                     Description = "API Key authentication using the 'X-API-Key' header",
                     Type = SecuritySchemeType.ApiKey,
@@ -113,7 +113,7 @@ internal partial class Program
             );
 
             options.AddSecurityRequirement(
-                new OpenApiSecurityRequirement
+                securityRequirement: new OpenApiSecurityRequirement
                 {
                     {
                         new OpenApiSecurityScheme
@@ -130,19 +130,19 @@ internal partial class Program
             );
 
             options.DocInclusionPredicate(
-                (docName, api) =>
+                predicate: static (docName, api) =>
                 {
                     // Exclude endpoints from MongoDB reference DLLs
-                    if (api.RelativePath != null && ExcludeAPIPath(api.RelativePath))
+                    if (api.RelativePath != null && ExcludeAPIPath(path: api.RelativePath))
                         return false;
 
                     if (docName == "Demo")
-                        return api.RelativePath?.ToLower().Contains("api/demo/") == true
-                            || api.GroupName?.Equals("Demo", StringComparison.OrdinalIgnoreCase)
+                        return api.RelativePath?.ToLower().Contains(value: "api/demo/") == true
+                            || api.GroupName?.Equals(value: "Demo", comparisonType: StringComparison.OrdinalIgnoreCase)
                                 == true;
 
                     if (docName == "Main")
-                        return api.GroupName?.Equals("Main", StringComparison.OrdinalIgnoreCase)
+                        return api.GroupName?.Equals(value: "Main", comparisonType: StringComparison.OrdinalIgnoreCase)
                                 == true
                             || api.GroupName == null;
 
@@ -150,9 +150,9 @@ internal partial class Program
                 }
             );
             var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-            options.IncludeXmlComments(xmlPath);
-            options.IncludeXmlComments(xmlPath);
+            var xmlPath = Path.Combine(path1: AppContext.BaseDirectory, path2: xmlFile);
+            options.IncludeXmlComments(filePath: xmlPath);
+            options.IncludeXmlComments(filePath: xmlPath);
 
             options.DocumentFilter<SwaggerDocGroupByTagsFilter>();
             if (_appConfigurations.Get<bool>(path: "SwaggerConfig.UI.SortEndpoints"))
@@ -206,11 +206,11 @@ internal partial class Program
         var swaggerList = app
             .Configuration.GetSection(key: "SwaggerList")
             .Get<List<SwaggerEndpoint>>()
-            ?.Where(predicate: endpoint =>
+            ?.Where(predicate: static endpoint =>
                 endpoint.Name != $"{CON_STR_APP_NAME} - API Docs"
                 && endpoint.Name != $"{CON_STR_APP_NAME} Demo API"
             )
-            .OrderBy(keySelector: endpoint => endpoint.Name);
+            .OrderBy(keySelector: static endpoint => endpoint.Name);
 
         if (swaggerList != null)
             foreach (var endpoint in swaggerList)

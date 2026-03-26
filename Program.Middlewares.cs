@@ -34,7 +34,7 @@ internal partial class Program
                 )
             )
             .UseHttpRequestLogging(
-                enabled: _appConfigurations.Get("Middlewares.RequestLogging", true)
+                enabled: _appConfigurations.Get(path: "Middlewares.RequestLogging", defaultValue: true)
             )
             .UseHttpAdditionalHeaders(configureOptions: static opt =>
             {

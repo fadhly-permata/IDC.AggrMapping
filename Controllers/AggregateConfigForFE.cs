@@ -1,6 +1,4 @@
 using System.Data;
-using IDC.AggrMapping.Utilities;
-using IDC.AggrMapping.Utilities.Data;
 using IDC.Utilities;
 using IDC.Utilities.Data;
 using IDC.Utilities.Extensions;
