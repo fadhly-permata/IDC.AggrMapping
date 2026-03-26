@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Hangfire.Common;
 using IDC.AggrMapping.Utilities.Models.AggregateEngine;
 using IDC.Utilities.Data;
@@ -33,7 +32,7 @@ internal static class GlobalConfigurationData
                     },
                 ],
             },
-            callback: data => { },
+            callback: _ => { },
             cancellationToken: cancellationToken
         );
 
@@ -49,7 +48,7 @@ internal static class InsertEngineData
         CancellationToken cancellationToken = default
     )
     {
-        mapCode.ThrowIfNullOrWhitespace(nameof(mapCode));
+        mapCode.ThrowIfNullOrWhitespace(paramName: nameof(mapCode));
 
         await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
         (_, var result) = await pgHelper.ExecuteScalarAsync(
@@ -62,7 +61,7 @@ internal static class InsertEngineData
                     new PostgreHelper.SPParameter { Name = "p_map_code", Value = mapCode },
                 ],
             },
-            callback: data => { },
+            callback: _ => { },
             cancellationToken: cancellationToken
         );
 
@@ -78,10 +77,10 @@ internal static class AggregateData
         CancellationToken cancellationToken = default
     )
     {
-        aggregateCode.ThrowIfNullOrWhitespace(nameof(aggregateCode));
+        aggregateCode.ThrowIfNullOrWhitespace(paramName: nameof(aggregateCode));
 
         await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
-        (_, var data) = await pgHelper.ExecuteScalarAsync(
+        var (_, data) = await pgHelper.ExecuteScalarAsync(
             spCallInfo: new PostgreHelper.SPCallInfo
             {
                 Schema = "aggregation",
@@ -91,15 +90,350 @@ internal static class AggregateData
                     new PostgreHelper.SPParameter { Name = "p_gc_code", Value = aggregateCode },
                 ],
             },
-            callback: data => { },
+            callback: _ => { },
             cancellationToken: cancellationToken
         );
 
         return new AggregateConfigurationModel
         {
             Code = aggregateCode,
-            Configurations = JObject.Parse(data as string ?? "{}"),
+            Configurations = JObject.Parse(json: data as string ?? "{}"),
         };
+    }
+}
+
+internal static class AggregateDataFe
+{
+    internal static async Task<JArray?> FE_GetDataGrid(
+        this PostgreHelper pgHelper,
+        string? gridType = "ALL",
+        CancellationToken cancellationToken = default
+    )
+    {
+        gridType.ThrowIfNullOrWhitespace(paramName: nameof(gridType));
+
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        var (_, data) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "aggregation",
+                SPName = "acv_get_aggregation_grid",
+                Parameters = [new PostgreHelper.SPParameter { Name = "p_mode", Value = gridType }],
+            },
+            callback: _ => { },
+            cancellationToken: cancellationToken
+        );
+
+        return JArray.Parse(json: data as string ?? "[]");
+    }
+
+    internal static async Task<JObject?> FE_GetDetail(
+        this PostgreHelper pgHelper,
+        int id,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (id < 1)
+            throw new ArgumentException(
+                paramName: nameof(id),
+                message: "Id must be greater than 0."
+            );
+
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        var (_, data) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "aggregation",
+                SPName = "acv_get_aggregation_detail",
+                Parameters =
+                [
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_id",
+                        Value = id,
+                        DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                    },
+                ],
+            },
+            callback: _ => { },
+            cancellationToken: cancellationToken
+        );
+
+        return JObject.Parse(json: data as string ?? "{}");
+    }
+
+    internal static async Task<JObject?> FE_Remove(
+        this PostgreHelper pgHelper,
+        int id,
+        string? username,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (id < 1)
+            throw new ArgumentException(
+                paramName: nameof(id),
+                message: "Id must be greater than 0."
+            );
+
+        username.ThrowIfNullOrWhitespace(
+            paramName: nameof(username),
+            message: "Username cannot be null, empty or whitespace."
+        );
+
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        var (_, data) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "aggregation",
+                SPName = "acv_remove_aggregation_data",
+                Parameters =
+                [
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_id",
+                        Value = id,
+                        DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                    },
+                    new PostgreHelper.SPParameter { Name = "p_username", Value = username },
+                ],
+            },
+            callback: _ => { },
+            cancellationToken: cancellationToken
+        );
+
+        return JObject.Parse(json: data as string ?? "{}");
+    }
+
+    internal static async Task<JObject?> FE_Rollback(
+        this PostgreHelper pgHelper,
+        int id,
+        string? username,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (id < 1)
+            throw new ArgumentException(
+                paramName: nameof(id),
+                message: "Id must be greater than 0."
+            );
+
+        username.ThrowIfNullOrWhitespace(
+            paramName: nameof(username),
+            message: "Username cannot be null, empty or whitespace."
+        );
+
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        var (_, data) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "aggregation",
+                SPName = "acv_rollback_aggregation",
+                Parameters =
+                [
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_id",
+                        Value = id,
+                        DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                    },
+                    new PostgreHelper.SPParameter { Name = "p_user", Value = username },
+                ],
+            },
+            callback: _ => { },
+            cancellationToken: cancellationToken
+        );
+
+        return JObject.Parse(json: data as string ?? "{}");
+    }
+
+    internal static async Task<JObject?> FE_Log(
+        this PostgreHelper pgHelper,
+        string code,
+        CancellationToken cancellationToken = default
+    )
+    {
+        code.ThrowIfNullOrWhitespace(
+            paramName: nameof(code),
+            message: "Code cannot be null, empty or whitespace."
+        );
+
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        var (_, data) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "aggregation",
+                SPName = "acv_log_aggregation",
+                Parameters = [new PostgreHelper.SPParameter { Name = "p_code", Value = code }],
+            },
+            callback: _ => { },
+            cancellationToken: cancellationToken
+        );
+
+        return JObject.Parse(json: data as string ?? "{}");
+    }
+
+    internal static async Task<JObject?> FE_Copy(
+        this PostgreHelper pgHelper,
+        int id,
+        string? name,
+        string? username,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (id < 1)
+            throw new ArgumentException(
+                paramName: nameof(id),
+                message: "Id must be greater than 0."
+            );
+
+        name.ThrowIfNullOrWhitespace(
+            paramName: nameof(name),
+            message: "Name cannot be null, empty or whitespace."
+        );
+
+        username.ThrowIfNullOrWhitespace(
+            paramName: nameof(username),
+            message: "Username cannot be null, empty or whitespace."
+        );
+
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        var (_, data) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "aggregation",
+                SPName = "acv_copy_aggregation",
+                Parameters =
+                [
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_id",
+                        Value = id,
+                        DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                    },
+                    new PostgreHelper.SPParameter { Name = "p_name", Value = name },
+                    new PostgreHelper.SPParameter { Name = "p_user", Value = username },
+                ],
+            },
+            callback: _ => { },
+            cancellationToken: cancellationToken
+        );
+
+        return JObject.Parse(json: data as string ?? "{}");
+    }
+
+    internal static async Task<JObject?> FE_Approval(
+        this PostgreHelper pgHelper,
+        int id,
+        string? username,
+        string? role,
+        string? action,
+        string? note,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (id < 1)
+            throw new ArgumentException(
+                paramName: nameof(id),
+                message: "Id must be greater than 0."
+            );
+
+        username.ThrowIfNullOrWhitespace(
+            paramName: nameof(username),
+            message: "Username cannot be null, empty or whitespace."
+        );
+
+        role.ThrowIfNullOrWhitespace(
+            paramName: nameof(role),
+            message: "Role cannot be null, empty or whitespace."
+        );
+
+        action.ThrowIfNullOrWhitespace(
+            paramName: nameof(action),
+            message: "Action cannot be null, empty or whitespace."
+        );
+
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        var (_, data) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "aggregation",
+                SPName = "acv_approval_proc_aggregation",
+                Parameters =
+                [
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_id",
+                        Value = id,
+                        DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                    },
+                    new PostgreHelper.SPParameter { Name = "p_user", Value = username },
+                    new PostgreHelper.SPParameter { Name = "p_role", Value = role },
+                    new PostgreHelper.SPParameter { Name = "p_action", Value = action },
+                    new PostgreHelper.SPParameter { Name = "p_note", Value = note },
+                ],
+            },
+            callback: _ => { },
+            cancellationToken: cancellationToken
+        );
+
+        return JObject.Parse(json: data as string ?? "{}");
+    }
+
+    public record AggrConfigUpsertModel(
+        string? Code,
+        string? Name,
+        string? Desc,
+        string? DataApplied,
+        string? Type,
+        string? JsonList,
+        string? jsonCondition,
+        string? configFinal
+    );
+
+    internal static async Task<JObject?> FE_Upsert(
+        this PostgreHelper pgHelper,
+        string? username,
+        int? id,
+        string? code,
+        string? name,
+        string? desc,
+        string? dataApplied,
+        string? type,
+        string? jsonList,
+        string? jsonCondition,
+        string? configFinal,
+        CancellationToken cancellationToken = default
+    )
+    {
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        var (_, data) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "aggregation",
+                SPName = "acv_upsert_aggregation",
+                Parameters =
+                [
+                    new PostgreHelper.SPParameter { Name = "p_user", Value = username },
+                    new PostgreHelper.SPParameter { Name = "p_id", Value = id },
+                    new PostgreHelper.SPParameter { Name = "p_code", Value = code },
+                    new PostgreHelper.SPParameter { Name = "p_name", Value = name },
+                    new PostgreHelper.SPParameter { Name = "p_desc", Value = desc },
+                    new PostgreHelper.SPParameter { Name = "p_data_applied", Value = dataApplied },
+                    new PostgreHelper.SPParameter { Name = "p_type", Value = type },
+                    new PostgreHelper.SPParameter { Name = "p_json_list", Value = jsonList },
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_json_condition",
+                        Value = jsonCondition,
+                    },
+                    new PostgreHelper.SPParameter { Name = "p_config_final", Value = configFinal },
+                ],
+            },
+            callback: _ => { },
+            cancellationToken: cancellationToken
+        );
+
+        return JObject.Parse(json: data as string ?? "{}");
     }
 }
 

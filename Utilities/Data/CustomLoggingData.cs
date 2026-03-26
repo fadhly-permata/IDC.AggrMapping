@@ -11,18 +11,17 @@ internal static class CustomLoggingData
         GroupedMappingModel? groupMapData
     )
     {
-        var header =
-            @$"
+        var header = $"""
 [ Loading Map Configuration ]
 MapCode: {mapCode}
-Status: {status}";
+Status: {status}
+""";
 
         if (groupMapData != null)
-            header +=
-                $@"
+            header += $"""
 Details Configurations:
 {groupMapData.ToJsonString()}
-";
+""";
 
         return header;
     }
@@ -33,13 +32,13 @@ Details Configurations:
         string generatedQuery
     )
     {
-        return @$"
+        return $"""
 [ Upsert Map Configuration ]
 MapCode: {mapCode}
 Status: {status}
 Generated Query: 
 {generatedQuery}
-";
+""";
     }
 
     private static async Task LogWriter(

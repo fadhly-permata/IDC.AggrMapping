@@ -1,6 +1,6 @@
 api untuk view/edit/detail itu api-nya sama
 
-api untuk view 
+[API DONE] [SP DONE] api untuk view 
 url: /AggrMapping/AggregateConfig/detail
 method: post
 payload
@@ -40,7 +40,7 @@ return
 
 ---
 
-api copy
+[API DONE] [SP DONE] api copy
 url: /AggrMapping/AggregateConfig/copy
 method: post
 payload
@@ -55,7 +55,7 @@ return nya sama dengan detail (hasil copy-nya)
 
 ----
 
-api log
+[API DONE] [SP DONE] api log
 url: /AggrMapping/AggregateConfig/log
 method: post 
 payload
@@ -68,6 +68,7 @@ return
     "desc": "", <-- gcv_desc
     logs: [
         {
+            "id": "",
             "version": "", 
             "status": "", 
             "name": "", 
@@ -79,7 +80,7 @@ return
 
 ----
 
-api untuk check/approve
+[API Done] [SP DONE] api untuk check/approve
 url: /AggrMapping/AggregateConfig/checkapprove
 method: post 
 payload
@@ -98,7 +99,7 @@ return
 
 --
 
-api untuk delete (soft delete aja)
+[API Done] [SP DONE] api untuk delete (soft delete aja)
 url: /AggrMapping/AggregateConfig/delete
 method: post 
 payload
@@ -114,7 +115,7 @@ return
 
 
 --
-api untuk rollback (based on logic SS di teams endang)
+[API Done] [SP DONE] api untuk rollback (based on logic SS di teams endang)
 url: /AggrMapping/AggregateConfig/rollback
 method: post 
 payload
@@ -125,12 +126,15 @@ payload
 return
 {
     "status": "FAILED/SUCCESS",
-    "message": ""
+    "message": "",
+    "data": {
+
+    }
 }
 
 
-untuk api data grid halaman depan:
-url: /AggrMapping/AggregateConfig/list/(active/version)
+[API DONE] [SP DONE] untuk api data grid halaman depan:
+url: /AggrMapping/AggregateConfig/list/(active/version/all) <-- untuk all gak termasuk yang deleted ya
 method: get 
 parameter:
 {
@@ -156,3 +160,47 @@ return
         "gcv_reject_position": "APPROVER" <- null
     }]
 
+
+[SP DONE] api untuk create/update
+url: /AggrMapping/AggregateConfig/(create/update)
+method: post
+parameter:
+{
+    "p_user": "", // varchar,
+    "p_id": "", // bigint DEFAULT NULL,
+    "p_code": "", // varchar DEFAULT NULL,
+    "p_name": "", // varchar DEFAULT NULL,
+    "p_desc": "", // text DEFAULT NULL,
+    "p_data_applied": "", // varchar DEFAULT NULL,
+    "p_type": "", // varchar DEFAULT NULL,
+    "p_json_list": "", // text DEFAULT NULL,      -- Diubah ke text sesuai tabel
+    "p_json_condition": "", // text DEFAULT NULL, -- Diubah ke text sesuai tabel
+    "p_config_final": "", // text DEFAULT NULL    -- Diubah ke text sesuai tabel
+}
+return
+{
+    "status": "FAILED/SUCCESS",
+    "message": "",
+    "data": {
+        ini pake aja
+    }
+}
+
+
+
+////////////////
+REVISI:
+
+[DONE] CASE UPSERT
+- p_code mending di ilangin dan dibikin auto generate aja
+
+
+[DON] CASE COPY
+- output dari copy harusnya sama kayak detail
+- p_code harusnya baru,
+- versi jadi 0001
+
+[DONE] CASE LOG
+- data yang tampil di log adalah:
+    - semua yang approved
+    - last version
