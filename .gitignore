@@ -3,8 +3,4 @@ obj
 wwwroot/logs/*
 copilot-guidelines.txt
 .vscode/launch.json
-idc-shr-dependency/IDC.Utilities.deps.json
-idc-shr-dependency/IDC.Utilities.dll
-idc-shr-dependency/IDC.Utilities.pdb
-idc-shr-dependency/IDC.Utilities.xml
-IDC.AggrMapping.sln
+idc-shr-dependency/*
