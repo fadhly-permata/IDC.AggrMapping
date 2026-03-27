@@ -4,3 +4,5 @@ wwwroot/logs/*
 copilot-guidelines.txt
 .vscode/launch.json
 idc-shr-dependency/*
+IDC.AggrMapping.csproj
+IDC.AggrMapping.sln

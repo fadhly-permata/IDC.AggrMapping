@@ -1,9 +1,9 @@
 using System.Text.Json.Serialization;
-using IDC.AggrMapping.Utilities.Data;
 using IDC.Utilities;
 using IDC.Utilities.Data;
 using IDC.Utilities.Extensions;
 using IDC.Utilities.Interfaces;
+using Newtonsoft.Json.Linq;
 
 namespace IDC.AggrMapping.Utilities.Models;
 
@@ -15,31 +15,31 @@ public partial class GlobalConfigurationModel : BaseModel<GlobalConfigurationMod
     /// <summary>
     ///     Gets or sets the maximum number of parallel processes.
     /// </summary>
-    [JsonPropertyName("maxParallelProcess")]
+    [JsonPropertyName(name: "maxParallelProcess")]
     public int MaxParallelProcess { get; set; } = DFLT_MAX_PRL_PROC;
 
     /// <summary>
     ///     Gets or sets the maximum depth for processing.
     /// </summary>
-    [JsonPropertyName("maxDepth")]
+    [JsonPropertyName(name: "maxDepth")]
     public int MaxDepth { get; set; } = DFLT_MAX_DEPTH;
 
     /// <summary>
     ///     Gets or sets the maximum number of map items allowed.
     /// </summary>
-    [JsonPropertyName("maxMapCount")]
+    [JsonPropertyName(name: "maxMapCount")]
     public int MaxMapCount { get; set; } = DFLT_MAX_MAP_CNT;
 
     /// <summary>
     ///     Gets or sets the maximum data payload size.
     /// </summary>
-    [JsonPropertyName("maxDataPayload")]
+    [JsonPropertyName(name: "maxDataPayload")]
     public int MaxDataPayload { get; set; } = DFLT_MAX_DATA_PLOAD;
 
     /// <summary>
     ///     Gets or sets the maximum number of map items allowed in a group.
     /// </summary>
-    [JsonPropertyName("maxGroupMapCount")]
+    [JsonPropertyName(name: "maxGroupMapCount")]
     public int MaxGroupMapCount { get; set; } = DFLT_MAX_GRP_MAP_CNT;
 }
 
@@ -64,7 +64,8 @@ public partial class GlobalConfigurationModel
             key: "GlobalConfigurations",
             valueFactory: async () =>
             {
-                var cData = await pgHelper.GetGlobalConfigurationsAsync(
+                var cData = await GetGlobalConfigurationsAsync(
+                    pgHelper: pgHelper,
                     configCodes: ["GAM01", "GAM02", "GAM03", "GAM04", "GAM05"],
                     cancellationToken: cancellationToken
                 );
@@ -72,14 +73,45 @@ public partial class GlobalConfigurationModel
                 if (cData is null)
                     return this;
 
-                MaxParallelProcess = cData.PropGet("GAM01", defaultValue: DFLT_MAX_PRL_PROC);
-                MaxDepth = cData.PropGet("GAM02", defaultValue: DFLT_MAX_DEPTH);
-                MaxMapCount = cData.PropGet("GAM03", defaultValue: DFLT_MAX_MAP_CNT);
-                MaxDataPayload = cData.PropGet("GAM04", defaultValue: DFLT_MAX_DATA_PLOAD);
-                MaxGroupMapCount = cData.PropGet("GAM05", defaultValue: DFLT_MAX_GRP_MAP_CNT);
+                MaxParallelProcess = cData.PropGet(path: "GAM01", defaultValue: DFLT_MAX_PRL_PROC);
+                MaxDepth = cData.PropGet(path: "GAM02", defaultValue: DFLT_MAX_DEPTH);
+                MaxMapCount = cData.PropGet(path: "GAM03", defaultValue: DFLT_MAX_MAP_CNT);
+                MaxDataPayload = cData.PropGet(path: "GAM04", defaultValue: DFLT_MAX_DATA_PLOAD);
+                MaxGroupMapCount = cData.PropGet(path: "GAM05", defaultValue: DFLT_MAX_GRP_MAP_CNT);
 
                 return this;
             },
             expirationRenewal: true
         );
+
+    internal static async Task<JObject?> GetGlobalConfigurationsAsync(
+        PostgreHelper pgHelper,
+        string[] configCodes,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (configCodes == null || configCodes.Length == 0)
+            throw new ArgumentNullException(paramName: nameof(configCodes));
+
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        var (_, result) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "aggregation",
+                SPName = "get_global_configs",
+                Parameters =
+                [
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_config_codes",
+                        Value = string.Join(separator: ",", value: configCodes),
+                    },
+                ],
+            },
+            callback: static _ => { },
+            cancellationToken: cancellationToken
+        );
+
+        return result != null ? JObject.Parse(json: result.ToString() ?? "{}") : null;
+    }
 }

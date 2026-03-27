@@ -23,21 +23,21 @@ internal partial class Program
 {
     private static WebApplicationBuilder SetupServices(this WebApplicationBuilder builder)
     {
-        builder.Services.Configure<ApiBehaviorOptions>(options =>
+        builder.Services.Configure<ApiBehaviorOptions>(configureOptions: static options =>
         {
             options.SuppressModelStateInvalidFilter = true;
         });
 
         builder
-            .Services.AddControllers(configure: options =>
+            .Services.AddControllers(configure: static options =>
             {
-                const string ContentType = "application/json";
+                const string contentType = "application/json";
 
                 // Tambahkan filter untuk model state validation
                 options.Filters.Add(item: new GenericModelValidation());
 
-                options.Filters.Add(item: new ConsumesAttribute(contentType: ContentType));
-                options.Filters.Add(item: new ProducesAttribute(contentType: ContentType));
+                options.Filters.Add(item: new ConsumesAttribute(contentType: contentType));
+                options.Filters.Add(item: new ProducesAttribute(contentType: contentType));
                 options.Filters.Add(item: new ProducesResponseTypeAttribute(statusCode: 200));
                 options.Filters.Add(
                     item: new ProducesResponseTypeAttribute(
@@ -52,7 +52,7 @@ internal partial class Program
                     )
                 );
             })
-            .AddNewtonsoftJson(setupAction: options =>
+            .AddNewtonsoftJson(setupAction: static options =>
             {
                 options.SerializerSettings.ContractResolver =
                     new CamelCasePropertyNamesContractResolver();
@@ -62,11 +62,11 @@ internal partial class Program
         // Add CORS policy
         if (_appConfigurations.Get<bool>(path: "Middlewares.Cors.Enabled"))
         {
-            builder.Services.AddCors(setupAction: options =>
+            builder.Services.AddCors(setupAction: static options =>
             {
                 options.AddPolicy(
                     name: $"{AppNameTrimmed()}-CorsPolicy",
-                    configurePolicy: builder => { }
+                    configurePolicy: static _ => { }
                 );
             });
         }
@@ -91,20 +91,20 @@ internal partial class Program
                 .RefinePlatformPath()
         );
 
-        builder.Services.AddSingleton(implementationFactory: _ => _appConfigurations);
+        builder.Services.AddSingleton(implementationFactory: static _ => _appConfigurations);
         return builder;
     }
 
     private static WebApplicationBuilder SetupAppSettings(this WebApplicationBuilder builder)
     {
         _appSettings = AppSettings.Load(filePath: "appsettings.json");
-        builder.Services.AddSingleton(implementationFactory: _ => _appSettings);
+        builder.Services.AddSingleton(implementationFactory: static _ => _appSettings);
         return builder;
     }
 
     private static WebApplicationBuilder SetupLanguage(this WebApplicationBuilder builder)
     {
-        builder.Services.AddSingleton(implementationFactory: _ => new Language(
+        builder.Services.AddSingleton(implementationFactory: static _ => new Language(
             jsonPath: Path.Combine(
                     path1: Directory.GetCurrentDirectory().RefinePlatformPath(),
                     path2: "wwwroot/messages.json".RefinePlatformPath()
@@ -117,11 +117,11 @@ internal partial class Program
 
     private static WebApplicationBuilder SetupSystemLogging(this WebApplicationBuilder builder)
     {
-        builder.Services.AddSingleton(implementationFactory: _ =>
+        builder.Services.AddSingleton(implementationFactory: static _ =>
         {
             _systemLogging ??= new SystemLogging(
                 options: new SystemLoggingOptions().MapProperties(
-                    jObject: _appConfigurations.Get<JObject>(path: "Logging", throwOnNull: true)!
+                    jObject: _appConfigurations.Get<JObject>(path: "Logging", throwOnNull: true)
                 ),
                 source: CON_STR_APP_NAME
             );
@@ -134,7 +134,7 @@ internal partial class Program
     private static WebApplicationBuilder SetupCaching(this WebApplicationBuilder builder)
     {
         if (_appConfigurations.Get(path: "DependencyInjection.Caching.Enable", defaultValue: false))
-            builder.Services.AddSingleton(static _ => new Caching(
+            builder.Services.AddSingleton(implementationFactory: static _ => new Caching(
                 defaultExpirationMinutes: _appConfigurations.Get(
                     path: "DependencyInjection.Caching.ExpirationInMinutes",
                     defaultValue: 30
@@ -148,7 +148,7 @@ internal partial class Program
     {
         if (_appConfigurations.Get(path: "Plugins.Enable", defaultValue: false))
         {
-            builder.Services.AddSingleton(implementationFactory: _ =>
+            builder.Services.AddSingleton(implementationFactory: static _ =>
             {
                 var plugin = new PluginManager(systemLogging: _systemLogging);
                 plugin.Initialize(
@@ -178,7 +178,7 @@ internal partial class Program
         return builder;
     }
 
-    private static WebApplicationBuilder SetupPGSQL(this WebApplicationBuilder builder)
+    private static WebApplicationBuilder SetupPgsql(this WebApplicationBuilder builder)
     {
         if (_appConfigurations.Get(path: "DependencyInjection.PGSQL", defaultValue: false))
             builder.Services.AddScoped(implementationFactory: static _ =>
@@ -201,7 +201,7 @@ internal partial class Program
                         : (
                             _appSettings.Get<string?>(path: "configPass.passwordDB")
                             ?? throw new InvalidOperationException(
-                                "Failed to retrieve database password."
+                                message: "Failed to retrieve database password."
                             )
                         ).LegacyDecryptor(
                             key: _appSettings.Get(
@@ -225,7 +225,7 @@ internal partial class Program
         return builder;
     }
 
-    private static WebApplicationBuilder SetupSQLite(this WebApplicationBuilder builder)
+    private static WebApplicationBuilder SetupSqLite(this WebApplicationBuilder builder)
     {
         if (_appConfigurations.Get(path: "DependencyInjection.SQLite", defaultValue: false))
             builder.Services.AddScoped(implementationFactory: static _ =>
@@ -260,10 +260,10 @@ internal partial class Program
         return builder;
     }
 
-    private static WebApplicationBuilder SetupMongoDB(this WebApplicationBuilder builder)
+    private static WebApplicationBuilder SetupMongoDb(this WebApplicationBuilder builder)
     {
         if (_appConfigurations.Get(path: "DependencyInjection.MongoDB", defaultValue: false))
-            builder.Services.AddScoped(static _ =>
+            builder.Services.AddScoped(implementationFactory: static _ =>
             {
                 var defaultConString = _appSettings.Get(
                     path: "DefaultConStrings.IDCAggrMapping.MongoDB",
@@ -271,7 +271,7 @@ internal partial class Program
                 );
 
                 var settings = MongoClientSettings.FromConnectionString(
-                    _appSettings.Get(
+                    connectionString: _appSettings.Get(
                         path: $"MongoDBSettings.{defaultConString}",
                         defaultValue: "mongodb://localhost:27017"
                     )
@@ -282,7 +282,9 @@ internal partial class Program
                 settings.RetryWrites = false;
                 settings.DirectConnection = defaultConString != "withReplica";
 
-                return new MongoClient(settings).GetDatabase(settings.ApplicationName ?? "IDC_EN");
+                return new MongoClient(settings: settings).GetDatabase(
+                    name: settings.ApplicationName ?? "IDC_EN"
+                );
             });
 
         return builder;
@@ -295,7 +297,7 @@ internal partial class Program
             defaultValue: "ConnectionString_en"
         );
 
-        builder.Services.AddHangfire(config =>
+        builder.Services.AddHangfire(configuration: config =>
             config
                 .SetDataCompatibilityLevel(compatibilityLevel: CompatibilityLevel.Version_180)
                 .UseSimpleAssemblyNameTypeSerializer()
@@ -315,7 +317,7 @@ internal partial class Program
                             : (
                                 _appSettings.Get<string?>(path: "configPass.passwordDB")
                                 ?? throw new InvalidOperationException(
-                                    "Failed to retrieve database password."
+                                    message: "Failed to retrieve database password."
                                 )
                             ).LegacyDecryptor(
                                 key: _appSettings.Get(
@@ -344,7 +346,7 @@ internal partial class Program
         this WebApplicationBuilder builder
     )
     {
-        builder.Services.AddApiKeyAuthentication(opt =>
+        builder.Services.AddApiKeyAuthentication(configureOptions: static opt =>
         {
             opt.SetLogger(logger: _systemLogging)
                 .MapProperties(
@@ -355,31 +357,31 @@ internal partial class Program
                 );
 
             // Buatkan logika untuk memproses API key dari sumber data
-            opt.ApiKeyFetcherAsync = async (apiKey) =>
+            opt.ApiKeyFetcherAsync = static async (_) =>
             {
                 await Task.Delay(millisecondsDelay: 10);
                 return true;
             };
 
             // Buatkan logika "TAMBAHAN" untuk memproses ketika API key tidak ditemukan
-            opt.OnApiKeyNotFoundAsync = async () =>
+            opt.OnApiKeyNotFoundAsync = static async () =>
             {
                 // Catatan: Tidak perlu membuat log di sini karena sudah ada di middleware
                 await Task.CompletedTask;
             };
 
             // Buatkan logika "TAMBAHAN" untuk memproses ketika API key tidak valid
-            opt.OnUnauthorizedAsync = async () =>
+            opt.OnUnauthorizedAsync = static async () =>
             {
                 // Catatan: Tidak perlu membuat log di sini karena sudah ada di middleware
                 await Task.CompletedTask;
             };
 
             // Buatkan logika "TAMBAHAN" untuk memproses ketika API key valid
-            opt.OnAuthorizedAsync = async () =>
+            opt.OnAuthorizedAsync = static async () =>
             {
                 // Boleh membuat log karena belum ada proses logging di middleware
-                _systemLogging.LogInformation(message: "API key is valid");
+                _systemLogging?.LogInformation(message: "API key is valid");
                 await Task.CompletedTask;
             };
         });

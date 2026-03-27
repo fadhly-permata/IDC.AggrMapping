@@ -13,7 +13,7 @@ public static partial class RegexAttributes
     /// <returns>
     /// A regular expression pattern that matches log entries.
     /// </returns>
-    [GeneratedRegex(@"(?=\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\])", RegexOptions.Singleline)]
+    [GeneratedRegex(pattern: @"(?=\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\])", options: RegexOptions.Singleline)]
     public static partial Regex LogEntrySplitter();
 
     /// <summary>
@@ -22,7 +22,7 @@ public static partial class RegexAttributes
     /// <returns>
     /// A regular expression pattern that matches log entries.
     /// </returns>
-    [GeneratedRegex(@"^\[(.*?)\] \[(.*?)\] (.+)$", RegexOptions.Singleline)]
+    [GeneratedRegex(pattern: @"^\[(.*?)\] \[(.*?)\] (.+)$", options: RegexOptions.Singleline)]
     public static partial Regex SimpleLogEntry();
 
     /// <summary>
@@ -32,8 +32,8 @@ public static partial class RegexAttributes
     /// A regular expression pattern that matches log entries.
     /// </returns>
     [GeneratedRegex(
-        @"\[(.*?)\] \[(.*?)\] Type: (.*?)[\r\n]+Message: (.*?)[\r\n]+StackTrace:[\r\n]+((?:   --> .*(?:\r?\n|$))*)",
-        RegexOptions.Singleline
+        pattern: @"\[(.*?)\] \[(.*?)\] Type: (.*?)[\r\n]+Message: (.*?)[\r\n]+StackTrace:[\r\n]+((?:   --> .*(?:\r?\n|$))*)",
+        options: RegexOptions.Singleline
     )]
     public static partial Regex DetailedLogEntry();
 }

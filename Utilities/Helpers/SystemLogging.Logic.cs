@@ -168,7 +168,7 @@ public static class SystemLoggingLogic
     /// <seealso href="https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats">File Path Formats</seealso>
     public static string GetFullLogPath(string baseDirectory, string logDirectory) =>
         Path.GetFullPath(
-            path: Path.Combine(path1: baseDirectory, path2: logDirectory.TrimStart('/', '\\'))
+            path: Path.Combine(path1: baseDirectory, path2: logDirectory.TrimStart(trimChars: ['/', '\\']))
         );
 
     /// <summary>
@@ -411,7 +411,7 @@ public static class SystemLoggingLogic
         new
         {
             file.Name,
-            Size = FormatFileSize(file.Length),
+            Size = FormatFileSize(length: file.Length),
             Created = file.CreationTime,
             Modified = file.LastWriteTime,
             URL = $"{requestScheme}://{requestHost}/logs/{file.Name}",
@@ -598,7 +598,7 @@ public static class SystemLoggingLogic
         logEntries
             .GroupBy(keySelector: static e => ((dynamic)e).Timestamp.Date)
             .OrderByDescending(keySelector: static g => g.Key)
-            .Select(static dateGroup => new
+            .Select(selector: static dateGroup => new
             {
                 Date = dateGroup.Key.ToString("yyyy-MM-dd"),
                 Total = dateGroup.Count(),
@@ -718,7 +718,7 @@ public static class SystemLoggingLogic
         entry = null!;
         try
         {
-            if (!line.Contains("Type:"))
+            if (!line.Contains(value: "Type:"))
             {
                 var simpleMatch = RegexAttributes.SimpleLogEntry().Match(input: line);
 
@@ -727,12 +727,12 @@ public static class SystemLoggingLogic
                     entry = new
                     {
                         Timestamp = DateTime.Parse(
-                            s: simpleMatch.Groups[0b1].Value,
+                            s: simpleMatch.Groups[groupnum: 0b1].Value,
                             provider: System.Globalization.CultureInfo.InvariantCulture
                         ),
-                        Level = simpleMatch.Groups[0b10].Value,
+                        Level = simpleMatch.Groups[groupnum: 0b10].Value,
                         Type = string.Empty,
-                        Message = simpleMatch.Groups[0b11].Value.Trim(),
+                        Message = simpleMatch.Groups[groupnum: 0b11].Value.Trim(),
                     };
                     return true;
                 }
@@ -744,7 +744,7 @@ public static class SystemLoggingLogic
                 if (detailedMatch.Success)
                 {
                     var stackTrace = detailedMatch
-                        .Groups[0b101]
+                        .Groups[groupnum: 0b101]
                         .Value.Split(
                             separator: "\n   --> ",
                             options: StringSplitOptions.RemoveEmptyEntries
@@ -758,12 +758,12 @@ public static class SystemLoggingLogic
                     entry = new
                     {
                         Timestamp = DateTime.Parse(
-                            s: detailedMatch.Groups[0b1].Value,
+                            s: detailedMatch.Groups[groupnum: 0b1].Value,
                             provider: System.Globalization.CultureInfo.InvariantCulture
                         ),
-                        Level = detailedMatch.Groups[0b10].Value,
-                        Type = detailedMatch.Groups[0b11].Value,
-                        Message = detailedMatch.Groups[0b100].Value,
+                        Level = detailedMatch.Groups[groupnum: 0b10].Value,
+                        Type = detailedMatch.Groups[groupnum: 0b11].Value,
+                        Message = detailedMatch.Groups[groupnum: 0b100].Value,
                         StackTrace = stackTrace,
                     };
                     return true;

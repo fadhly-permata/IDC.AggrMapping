@@ -98,21 +98,21 @@ public partial class InsertAndAggregatePayloadModel
 
         BatchId.ThrowIfNullOrWhitespace(paramName: nameof(BatchId));
         if (TotalItems < 1 || TotalItems > 100)
-            throw new DataException("Total items must be between 1 and 100.");
+            throw new DataException(s: "Total items must be between 1 and 100.");
 
         if (ProcessIndex < 1 || ProcessIndex > 100)
-            throw new DataException("Process index must be between 1 and 100.");
+            throw new DataException(s: "Process index must be between 1 and 100.");
 
         if (ProcessIndex > TotalItems)
-            throw new DataException("Process index must be less than or equal to total items.");
+            throw new DataException(s: "Process index must be less than or equal to total items.");
 
         if (Data is null)
-            throw new DataException("Data can not be null.");
+            throw new DataException(s: "Data can not be null.");
 
-        if (Data is JArray array && array.Count == 0)
-            throw new DataException("Data can not be empty.");
-        else if (Data is JObject obj && obj.Count == 0)
-            throw new DataException("Data can not be empty.");
+        if (Data is JArray { Count: 0 })
+            throw new DataException(s: "Data can not be empty.");
+        else if (Data is JObject { Count: 0 })
+            throw new DataException(s: "Data can not be empty.");
 
         await Task.CompletedTask;
     }

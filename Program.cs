@@ -14,7 +14,7 @@ internal static partial class Program
 
     private static AppConfigurations _appConfigurations = null!;
     private static AppSettings _appSettings = null!;
-    private static SystemLogging _systemLogging = null!;
+    private static SystemLogging? _systemLogging;
 
     private static string AppNameTrimmed() => CON_STR_APP_NAME.Replace(oldValue: ".", newValue: "");
 
@@ -37,9 +37,9 @@ internal static partial class Program
             .SetupServices()
             .SetupSwagger()
             .SetupCaching()
-            .SetupPGSQL()
-            .SetupSQLite()
-            .SetupMongoDB()
+            .SetupPgsql()
+            .SetupSqLite()
+            .SetupMongoDb()
             .SetupPlugins()
             .SetupHangfire();
 
@@ -77,7 +77,7 @@ internal static partial class Program
         );
 
         builder.Services.AddHangfireServer(
-            optionsAction: (provider, options) =>
+            optionsAction: (_, options) =>
             {
                 options.WorkerCount = gcm.MaxParallelProcess;
                 options.Queues = ["high_priority", "default", "low_priority"];
@@ -97,7 +97,7 @@ internal static partial class Program
                 return true;
 
             // Di stage non debug, lakukan cek API key
-            return context.GetHttpContext().Request.Headers["X-Hangfire-Key"]
+            return context.GetHttpContext().Request.Headers[key: "X-Hangfire-Key"]
                 == "your-secret-key-here";
         }
     }

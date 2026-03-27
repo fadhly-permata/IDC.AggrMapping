@@ -1,6 +1,6 @@
 using System.Data;
 using IDC.AggrMapping.Utilities;
-using IDC.AggrMapping.Utilities.Data;
+using IDC.AggrMapping.Utilities.Models;
 using IDC.Utilities;
 using IDC.Utilities.Data;
 using IDC.Utilities.Extensions;
@@ -13,90 +13,11 @@ namespace IDC.AggrMapping.Controllers;
 /// <summary>
 ///     Controller Data Aggregation for Frontend
 /// </summary>
-[Route("AggrMapping/AggregateConfig")]
+[Route(template: "AggrMapping/AggregateConfig")]
 [ApiController]
 public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgHelper)
     : ControllerBase
 {
-    /// <summary>
-    ///     Represents the unique identifier for an aggregation configuration
-    /// </summary>
-    /// <param name="Id">
-    ///     The unique numeric identifier of the aggregation configuration.
-    ///     Must be a positive integer greater than 0.
-    /// </param>
-    public record AggConfigId(int Id);
-
-    /// <summary>
-    ///     Represents the unique identifier for an aggregation configuration
-    /// </summary>
-    /// <param name="Id">
-    ///     The unique numeric identifier of the aggregation configuration.
-    ///     Must be a positive integer greater than 0.
-    /// </param>
-    /// <param name="User">
-    ///     The user associated with the aggregation configuration.
-    ///     Must be a non-empty string.
-    /// </param>
-    public record AggrConfigIdAndUser(int Id, string User);
-
-    /// <summary>
-    ///     Represents an aggregation configuration identifier with additional metadata
-    /// </summary>
-    /// <param name="Id">
-    ///     The unique numeric identifier of the aggregation configuration
-    /// </param>
-    /// <param name="Name">
-    ///     The display name or title of the aggregation configuration
-    /// </param>
-    /// <param name="User">
-    ///     The username or identifier of the user associated with the operation
-    /// </param>
-    public record AggrConfigCopy(int Id, string Name, string User);
-
-    /// <summary>
-    ///     Represents the unique code identifier for an aggregation configuration
-    /// </summary>
-    /// <param name="Code">
-    ///     The unique alphanumeric code that identifies the aggregation configuration.
-    ///     Must be non-null and non-whitespace.
-    /// </param>
-    /// <remarks>
-    ///     This record is used to pass aggregation configuration codes between application layers.
-    ///     The code typically follows a specific naming convention defined by the system.
-    /// </remarks>
-    public record AggrConfigCode(string Code);
-
-    /// <summary>
-    ///     Represents an approval action on an aggregation configuration
-    /// </summary>
-    /// <param name="Id">
-    ///     The unique identifier of the aggregation configuration being approved/rejected
-    /// </param>
-    /// <param name="Username">
-    ///     The username of the person performing the approval action
-    /// </param>
-    /// <param name="Role">
-    ///     The role of the user in the approval process (e.g., "Approver", "Reviewer")
-    /// </param>
-    /// <param name="Action">
-    ///     The approval action being taken (e.g., "Approve", "Reject", "Request Changes")
-    /// </param>
-    /// <param name="Note">
-    ///     Optional comments or notes regarding the approval decision
-    /// </param>
-    /// <remarks>
-    ///     This record is used to track and process approval workflow
-    ///     for aggregation configuration changes.
-    /// </remarks>
-    public record AggrConfigApproval(
-        int Id,
-        string? Username,
-        string? Role,
-        string? Action,
-        string? Note
-    );
-
     /// <summary>
     ///     Retrieves a paginated list of aggregation configurations based on the specified filter type
     /// </summary>
@@ -130,7 +51,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     ///     - Message: Error message if status is "Failed"
     ///     - Data: <see cref="JArray"/> of aggregation configurations
     /// </returns>
-    [Tags(tags: "Aggregation Config For FE"), HttpGet("DataGrid/{gridType}")]
+    [Tags(tags: "Aggregation Config For FE"), HttpGet(template: "DataGrid/{gridType}")]
     public async Task<APIResponseData<JArray?>> DataGrid(
         [FromRoute] string? gridType = "ALL",
         CancellationToken cancellationToken = default
@@ -138,13 +59,46 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     {
         try
         {
-            gridType.ThrowIfNullOrWhitespace(nameof(gridType));
+            gridType.ThrowIfNullOrWhitespace(
+                paramName: nameof(gridType),
+                message: "Grid type cannot be null, empty or whitespace."
+            );
 
-            return new APIResponseData<JArray?>().ChangeData(
-                data: await pgHelper.FE_GetDataGrid(
-                    gridType: gridType,
-                    cancellationToken: cancellationToken
-                ) ?? new JArray()
+            var allowedGridTypes = new[] { "ALL", "LAST_ACTIVE", "LAST_VERSION" };
+            if (
+                !allowedGridTypes.Contains(
+                    value: gridType,
+                    comparer: StringComparer.OrdinalIgnoreCase
+                )
+            )
+                throw new ArgumentException(
+                    paramName: nameof(gridType),
+                    message: $"Grid type must be one of: {string.Join(separator: ", ", value: allowedGridTypes)}."
+                );
+
+            return await new APIResponseData<JArray?>().ChangeData(
+                valueFactoryAsync: async (ct) =>
+                {
+                    await Task.CompletedTask;
+
+                    await pgHelper.ConnectAsync(cancellationToken: ct);
+                    var (_, data) = await pgHelper.ExecuteScalarAsync(
+                        spCallInfo: new PostgreHelper.SPCallInfo
+                        {
+                            Schema = "aggregation",
+                            SPName = "acv_get_aggregation_grid",
+                            Parameters =
+                            [
+                                new PostgreHelper.SPParameter { Name = "p_mode", Value = gridType },
+                            ],
+                        },
+                        callback: _ => { },
+                        cancellationToken: ct
+                    );
+
+                    return JArray.Parse(json: data as string ?? "[]");
+                },
+                cancellationToken: cancellationToken
             );
         }
         catch (Exception ex)
@@ -195,25 +149,45 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     /// <exception cref="DataException">
     ///     Thrown when no configuration is found with the specified ID
     /// </exception>
-    [Tags(tags: "Aggregation Config For FE"), HttpPost("Detail")]
+    [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "Detail")]
     public async Task<APIResponseData<JObject?>> Detail(
-        AggConfigId payload,
+        AggrConfigFeModel.IdOnly payload,
         CancellationToken cancellationToken = default
     )
     {
         try
         {
-            var detail = await pgHelper.FE_GetDetail(
-                id: payload.Id,
-                cancellationToken: cancellationToken
-            );
+            return await new APIResponseData<JObject?>().ChangeData(
+                valueFactoryAsync: async (ct) =>
+                {
+                    await pgHelper.ConnectAsync(cancellationToken: ct);
+                    var (_, data) = await pgHelper.ExecuteScalarAsync(
+                        spCallInfo: new PostgreHelper.SPCallInfo
+                        {
+                            Schema = "aggregation",
+                            SPName = "acv_get_aggregation_detail",
+                            Parameters =
+                            [
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_id",
+                                    Value = payload.Id,
+                                    DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                                },
+                            ],
+                        },
+                        callback: _ => { },
+                        cancellationToken: ct
+                    );
 
-            return new APIResponseData<JObject?>().ChangeData(
-                data: detail is { Count: > 0 }
-                    ? detail
-                    : throw new DataException(
-                        $"Aggregate configuration with id '{payload.Id}' not found."
-                    )
+                    return JObject.Parse(
+                        json: data as string
+                            ?? throw new DataException(
+                                s: $"Aggregate configuration with id '{payload.Id}' not found."
+                            )
+                    );
+                },
+                cancellationToken: cancellationToken
             );
         }
         catch (Exception ex)
@@ -258,20 +232,45 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     ///     - Message: Operation result message
     ///     - Data: JObject containing deletion confirmation (usually null on success)
     /// </returns>
-    [Tags("Aggregation Config For FE"), HttpPost("AggrConfigIdAndUser/Delete")]
+    [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Delete")]
     public async Task<APIResponseData<JObject?>> Delete(
-        AggrConfigIdAndUser payload,
+        AggrConfigFeModel.IdAndUser payload,
         CancellationToken cancellationToken = default
     )
     {
         try
         {
-            return new APIResponseData<JObject?>().ChangeData(
-                data: await pgHelper.FE_Remove(
-                    id: payload.Id,
-                    username: payload.User,
-                    cancellationToken: cancellationToken
-                )
+            return await new APIResponseData<JObject?>().ChangeData(
+                valueFactoryAsync: async (ct) =>
+                {
+                    await pgHelper.ConnectAsync(cancellationToken: ct);
+                    var (_, data) = await pgHelper.ExecuteScalarAsync(
+                        spCallInfo: new PostgreHelper.SPCallInfo
+                        {
+                            Schema = "aggregation",
+                            SPName = "acv_remove_aggregation_data",
+                            Parameters =
+                            [
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_id",
+                                    Value = payload.Id,
+                                    DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_username",
+                                    Value = payload.User,
+                                },
+                            ],
+                        },
+                        callback: _ => { },
+                        cancellationToken: ct
+                    );
+
+                    return JObject.Parse(json: data as string ?? "{}");
+                },
+                cancellationToken: cancellationToken
             );
         }
         catch (Exception ex)
@@ -316,20 +315,45 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     ///     - Message: Operation result message
     ///     - Data: JObject containing the rolled back configuration status
     /// </returns>
-    [Tags("Aggregation Config For FE"), HttpPost("AggrConfigIdAndUser/Rollback")]
+    [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Rollback")]
     public async Task<APIResponseData<JObject?>> Rollback(
-        AggrConfigIdAndUser payload,
+        AggrConfigFeModel.IdAndUser payload,
         CancellationToken cancellationToken = default
     )
     {
         try
         {
-            return new APIResponseData<JObject?>().ChangeData(
-                data: await pgHelper.FE_Rollback(
-                    id: payload.Id,
-                    username: payload.User,
-                    cancellationToken: cancellationToken
-                )
+            return await new APIResponseData<JObject?>().ChangeData(
+                valueFactoryAsync: async (ct) =>
+                {
+                    await pgHelper.ConnectAsync(cancellationToken: ct);
+                    var (_, data) = await pgHelper.ExecuteScalarAsync(
+                        spCallInfo: new PostgreHelper.SPCallInfo
+                        {
+                            Schema = "aggregation",
+                            SPName = "acv_rollback_aggregation",
+                            Parameters =
+                            [
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_id",
+                                    Value = payload.Id,
+                                    DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_user",
+                                    Value = payload.User,
+                                },
+                            ],
+                        },
+                        callback: _ => { },
+                        cancellationToken: ct
+                    );
+
+                    return JObject.Parse(json: data as string ?? "{}");
+                },
+                cancellationToken: cancellationToken
             );
         }
         catch (Exception ex)
@@ -372,19 +396,39 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     ///     - Message: Error message if status is "Failed"
     ///     - Data: JObject containing the log entries for the configuration
     /// </returns>
-    [Tags("Aggregation Config For FE"), HttpPost("AggrConfigIdAndUser/Log")]
+    [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Log")]
     public async Task<APIResponseData<JObject?>> Log(
-        AggrConfigCode payload,
+        AggrConfigFeModel.CodeOnly payload,
         CancellationToken cancellationToken = default
     )
     {
         try
         {
-            return new APIResponseData<JObject?>().ChangeData(
-                data: await pgHelper.FE_Log(
-                    code: payload.Code,
-                    cancellationToken: cancellationToken
-                )
+            return await new APIResponseData<JObject?>().ChangeData(
+                valueFactoryAsync: async (ct) =>
+                {
+                    await pgHelper.ConnectAsync(cancellationToken: ct);
+                    var (_, data) = await pgHelper.ExecuteScalarAsync(
+                        spCallInfo: new PostgreHelper.SPCallInfo
+                        {
+                            Schema = "aggregation",
+                            SPName = "acv_log_aggregation",
+                            Parameters =
+                            [
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_code",
+                                    Value = payload.Code,
+                                },
+                            ],
+                        },
+                        callback: _ => { },
+                        cancellationToken: ct
+                    );
+
+                    return JObject.Parse(json: data as string ?? "{}");
+                },
+                cancellationToken: cancellationToken
             );
         }
         catch (Exception e)
@@ -431,21 +475,50 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     ///     - Message: Operation result message
     ///     - Data: JObject containing the new configuration details
     /// </returns>
-    [Tags("Aggregation Config For FE"), HttpPost("AggrConfigIdAndUser/Copy")]
+    [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Copy")]
     public async Task<APIResponseData<JObject?>> Copy(
-        AggrConfigCopy payload,
+        AggrConfigFeModel.CopyData payload,
         CancellationToken cancellationToken = default
     )
     {
         try
         {
-            return new APIResponseData<JObject?>().ChangeData(
-                data: await pgHelper.FE_Copy(
-                    id: payload.Id,
-                    name: payload.Name,
-                    username: payload.User,
-                    cancellationToken: cancellationToken
-                )
+            return await new APIResponseData<JObject?>().ChangeData(
+                valueFactoryAsync: async (ct) =>
+                {
+                    await pgHelper.ConnectAsync(cancellationToken: ct);
+                    var (_, data) = await pgHelper.ExecuteScalarAsync(
+                        spCallInfo: new PostgreHelper.SPCallInfo
+                        {
+                            Schema = "aggregation",
+                            SPName = "acv_copy_aggregation",
+                            Parameters =
+                            [
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_id",
+                                    Value = payload.Id,
+                                    DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_name",
+                                    Value = payload.Name,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_user",
+                                    Value = payload.User,
+                                },
+                            ],
+                        },
+                        callback: _ => { },
+                        cancellationToken: ct
+                    );
+
+                    return JObject.Parse(json: data as string ?? "{}");
+                },
+                cancellationToken: cancellationToken
             );
         }
         catch (Exception e)
@@ -468,6 +541,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     ///     allowing authorized users to approve, reject, or request changes.
     ///
     ///     Sample request:
+    ///     ```
     ///     POST /AggrMapping/AggregateConfig/AggrConfigIdAndUser/Approval
     ///     {
     ///         "Id": 12345,
@@ -476,6 +550,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     ///         "Action": "Approve",
     ///         "Note": "Configuration meets all requirements"
     ///     }
+    ///     ```
     /// </remarks>
     /// <param name="payload">
     ///     The approval details containing:
@@ -494,23 +569,365 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     ///     - Message: Operation result message
     ///     - Data: JObject containing approval result and updated configuration status
     /// </returns>
-    [Tags("Aggregation Config For FE"), HttpPost("AggrConfigIdAndUser/Approval")]
+    [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Approval")]
     public async Task<APIResponseData<JObject?>> Approval(
-        AggrConfigApproval payload,
+        AggrConfigFeModel.AggrConfigApproval payload,
         CancellationToken cancellationToken = default
     )
     {
         try
         {
-            return new APIResponseData<JObject?>().ChangeData(
-                data: await pgHelper.FE_Approval(
-                    id: payload.Id,
-                    username: payload.Username,
-                    role: payload.Role,
-                    action: payload.Action,
-                    note: payload.Note,
-                    cancellationToken: cancellationToken
-                )
+            return await new APIResponseData<JObject?>().ChangeData(
+                valueFactoryAsync: async (ct) =>
+                {
+                    await pgHelper.ConnectAsync(cancellationToken: ct);
+                    var (_, data) = await pgHelper.ExecuteScalarAsync(
+                        spCallInfo: new PostgreHelper.SPCallInfo
+                        {
+                            Schema = "aggregation",
+                            SPName = "acv_approval_proc_aggregation",
+                            Parameters =
+                            [
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_id",
+                                    Value = payload.Id,
+                                    DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_user",
+                                    Value = payload.User,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_role",
+                                    Value = payload.Role,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_action",
+                                    Value = payload.Action,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_note",
+                                    Value = payload.Note,
+                                },
+                            ],
+                        },
+                        callback: _ => { },
+                        cancellationToken: ct
+                    );
+
+                    return JObject.Parse(json: data as string ?? "{}");
+                },
+                cancellationToken: cancellationToken
+            );
+        }
+        catch (Exception e)
+        {
+            return new APIResponseData<JObject?>()
+                .ChangeStatus(status: "Failed")
+                .ChangeMessage(
+                    exception: e,
+                    logging: systemLogging,
+                    includeStackTrace: Commons.IS_DEBUG_MODE
+                );
+        }
+    }
+
+    /// <summary>
+    ///     Creates a new aggregation configuration in the system
+    /// </summary>
+    /// <remarks>
+    ///     This endpoint allows creating a new aggregation configuration with the specified parameters.
+    ///     The configuration will be validated against system requirements before being persisted.
+    ///
+    ///     Sample request:
+    ///     ```json
+    ///     POST /api/aggregate-config
+    ///     Content-Type: application/json
+    ///
+    ///     {
+    ///         "user": "admin@example.com",
+    ///         "name": "Sample Configuration",
+    ///         "desc": "Sample description",
+    ///         "type": "response",
+    ///         "data_applied": "{\"key\":\"value\"}",
+    ///         "json_list": [
+    ///             { "field": "value1" },
+    ///             { "field": "value2" }
+    ///         ],
+    ///         "json_condition": [
+    ///             { "condition": "field = value" }
+    ///         ],
+    ///         "final_config": [
+    ///             { "config": "final_value" }
+    ///         ]
+    ///     }
+    ///     ```
+    ///
+    ///     **Notes:**
+    ///     - The user field is required and must be a non-empty string
+    ///     - The name field is required and must contain only alphanumeric characters, spaces, and underscores
+    ///     - data_applied must be a valid JSON string
+    ///     - json_list, json_condition, and final_config must be valid JSON arrays
+    /// </remarks>
+    /// <param name="payload">
+    ///     The aggregation configuration data to be created.
+    ///     Must satisfy all validation requirements.
+    ///
+    ///     Required properties:
+    ///     - user (string): The username or identifier of the user creating the configuration
+    ///     - name (string): The display name of the configuration
+    ///     - data_applied (string): JSON string representing the applied data
+    ///
+    ///     Optional properties:
+    ///     - desc (string): Description of the configuration
+    ///     - type (string): Type of configuration (e.g., "response")
+    ///     - json_list (JArray): JSON array of list items
+    ///     - json_condition (JArray): JSON array of conditions
+    ///     - final_config (JArray): JSON array of final configuration
+    /// </param>
+    /// <param name="cancellationToken">
+    ///     Cancellation token that can be used to cancel the asynchronous operation.
+    ///     Used to terminate ongoing requests if needed.
+    /// </param>
+    /// <returns>
+    ///     APIResponseData with:
+    ///     - Status: "Success" or "Failed"
+    ///     - Message: Operation result message
+    ///     - Data: JObject containing approval result and updated configuration status
+    /// </returns>
+    [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Insert")]
+    public async Task<APIResponseData<JObject?>> Insert(
+        AggrConfigFeModel.Insert payload,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            return await new APIResponseData<JObject?>().ChangeData(
+                valueFactoryAsync: async (ct) =>
+                {
+                    await pgHelper.ConnectAsync(cancellationToken: ct);
+                    var (_, data) = await pgHelper.ExecuteScalarAsync(
+                        spCallInfo: new PostgreHelper.SPCallInfo
+                        {
+                            Schema = "aggregation",
+                            SPName = "acv_upsert_aggregation",
+                            Parameters =
+                            [
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_id",
+                                    Value = null,
+                                    DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_user",
+                                    Value = payload.User,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_name",
+                                    Value = payload.Name,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_desc",
+                                    Value = payload.Desc,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_data_applied",
+                                    Value = payload.DataApplied,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_type",
+                                    Value = payload.Type,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_json_list",
+                                    Value = payload.JsonList,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_json_condition",
+                                    Value = payload.JsonCondition,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_config_final",
+                                    Value = payload.ConfigFinal,
+                                },
+                            ],
+                        },
+                        callback: _ => { },
+                        cancellationToken: ct
+                    );
+
+                    return JObject.Parse(json: data as string ?? "{}");
+                },
+                cancellationToken: cancellationToken
+            );
+        }
+        catch (Exception e)
+        {
+            return new APIResponseData<JObject?>()
+                .ChangeStatus(status: "Failed")
+                .ChangeMessage(
+                    exception: e,
+                    logging: systemLogging,
+                    includeStackTrace: Commons.IS_DEBUG_MODE
+                );
+        }
+    }
+
+    /// <summary>
+    ///     Updates an existing aggregation configuration in the system
+    /// </summary>
+    /// <remarks>
+    ///     This endpoint allows updating an existing aggregation configuration with new values.
+    ///     The configuration will be validated against system requirements before being updated.
+    ///
+    ///     Sample request:
+    ///     ```json
+    ///     POST /api/aggregate-config/AggrConfigIdAndUser/Update
+    ///     Content-Type: application/json
+    ///
+    ///     {
+    ///         "id": 12345,
+    ///         "user": "admin@example.com",
+    ///         "name": "Updated Configuration",
+    ///         "desc": "Updated description",
+    ///         "type": "response",
+    ///         "data_applied": "{\"key\":\"updated_value\"}",
+    ///         "json_list": [
+    ///             { "field": "updated_value1" },
+    ///             { "field": "updated_value2" }
+    ///         ],
+    ///         "json_condition": [
+    ///             { "condition": "field = updated_value" }
+    ///         ],
+    ///         "final_config": [
+    ///             { "config": "updated_final_value" }
+    ///         ]
+    ///     }
+    ///     ```
+    ///
+    ///     **Notes:**
+    ///     - The id field is required and must be a positive integer
+    ///     - The user field is required and must be a non-empty string
+    ///     - The name field is required and must contain only alphanumeric characters, spaces, and underscores
+    ///     - data_applied must be a valid JSON string
+    ///     - json_list, json_condition, and final_config must be valid JSON arrays
+    /// </remarks>
+    /// <param name="payload">
+    ///     The aggregation configuration data to be updated.
+    ///     Must satisfy all validation requirements.
+    ///
+    ///     Required properties:
+    ///     - id (int): The unique identifier of the configuration to update
+    ///     - user (string): The username or identifier of the user updating the configuration
+    ///     - name (string): The updated display name of the configuration
+    ///     - data_applied (string): Updated JSON string representing the applied data
+    ///
+    ///     Optional properties:
+    ///     - desc (string): Updated description of the configuration
+    ///     - type (string): Updated type of configuration (e.g., "response")
+    ///     - json_list (JArray): Updated JSON array of list items
+    ///     - json_condition (JArray): Updated JSON array of conditions
+    ///     - final_config (JArray): Updated JSON array of final configuration
+    /// </param>
+    /// <param name="cancellationToken">
+    ///     Cancellation token that can be used to cancel the asynchronous operation.
+    ///     Used to terminate ongoing requests if needed.
+    /// </param>
+    /// <returns>
+    ///     APIResponseData with:
+    ///     - Status: "Success" or "Failed"
+    ///     - Message: Operation result message
+    ///     - Data: JObject containing approval result and updated configuration status
+    /// </returns>
+    [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Update")]
+    public async Task<APIResponseData<JObject?>> Update(
+        AggrConfigFeModel.Update payload,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            return await new APIResponseData<JObject?>().ChangeData(
+                valueFactoryAsync: async (ct) =>
+                {
+                    await pgHelper.ConnectAsync(cancellationToken: ct);
+                    var (_, data) = await pgHelper.ExecuteScalarAsync(
+                        spCallInfo: new PostgreHelper.SPCallInfo
+                        {
+                            Schema = "aggregation",
+                            SPName = "acv_upsert_aggregation",
+                            Parameters =
+                            [
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_id",
+                                    Value = payload.Id,
+                                    DataType = NpgsqlTypes.NpgsqlDbType.Bigint,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_user",
+                                    Value = payload.User,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_name",
+                                    Value = payload.Name,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_desc",
+                                    Value = payload.Desc,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_data_applied",
+                                    Value = payload.DataApplied,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_type",
+                                    Value = payload.Type,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_json_list",
+                                    Value = payload.JsonList,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_json_condition",
+                                    Value = payload.JsonCondition,
+                                },
+                                new PostgreHelper.SPParameter
+                                {
+                                    Name = "p_config_final",
+                                    Value = payload.ConfigFinal,
+                                },
+                            ],
+                        },
+                        callback: _ => { },
+                        cancellationToken: ct
+                    );
+
+                    return JObject.Parse(json: data as string ?? "{}");
+                },
+                cancellationToken: cancellationToken
             );
         }
         catch (Exception e)

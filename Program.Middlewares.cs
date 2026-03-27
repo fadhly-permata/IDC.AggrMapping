@@ -24,7 +24,7 @@ internal partial class Program
                         )!
                     );
 
-                if (opt.Enabled && opt.MaxRequests <= 0)
+                if (opt is { Enabled: true, MaxRequests: <= 0 })
                     opt.MaxRequests = 100;
             })
             .UseHttpResponseCompression(
@@ -34,7 +34,10 @@ internal partial class Program
                 )
             )
             .UseHttpRequestLogging(
-                enabled: _appConfigurations.Get("Middlewares.RequestLogging", true)
+                enabled: _appConfigurations.Get(
+                    path: "Middlewares.RequestLogging",
+                    defaultValue: true
+                )
             )
             .UseHttpAdditionalHeaders(configureOptions: static opt =>
             {

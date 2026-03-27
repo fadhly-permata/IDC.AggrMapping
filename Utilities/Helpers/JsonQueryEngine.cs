@@ -6,7 +6,7 @@ using IDC.Utilities.Extensions;
 using Newtonsoft.Json.Linq;
 using org.matheval;
 
-namespace IDC.AggrMapping.Utilities;
+namespace IDC.AggrMapping.Utilities.Helpers;
 
 internal partial class JsonQueryEngine
 {
@@ -15,7 +15,7 @@ internal partial class JsonQueryEngine
     );
     private readonly Dictionary<string, object?> _processedResults = [];
     private readonly JObject _sourceData;
-    private readonly StringBuilder _sbLog = new();
+    internal readonly StringBuilder Log = new();
 
     [GeneratedRegex(pattern: @"([\w#]+)\[\]\.([\w]+)(?:\[(\d+(?:\s*,\s*\d+)*)\])?")]
     private static partial Regex ArrayFieldQueryPatternRegex();
@@ -678,6 +678,6 @@ internal partial class JsonQueryEngine
     private void LogWritter(string text)
     {
         Console.WriteLine(value: $"[JsonQueryEngine Log] {text}");
-        _sbLog.AppendLine(value: text);
+        Log.AppendLine(value: text);
     }
 }

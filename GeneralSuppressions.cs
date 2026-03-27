@@ -50,3 +50,19 @@
     Target = "~N:IDC.AggrMapping.Utilities.Models",
     Justification = "CodeAnalysis salah analisa struktur kode, jadi gak bisa di paksa nurut."
 )]
+
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage(
+    category: "SonarQube",
+    checkId: "S2068",
+    Scope = "member",
+    Target = "~M:IDC.AggrMapping.Program.SetupPgsql(Microsoft.AspNetCore.Builder.WebApplicationBuilder)~Microsoft.AspNetCore.Builder.WebApplicationBuilder",
+    Justification = "Sonarqube salah analisa, gak ada password di dalam method tersebut."
+)]
+
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage(
+    category: "SonarQube",
+    checkId: "S2068",
+    Scope = "member",
+    Target = "~M:IDC.AggrMapping.Program.SetupHangfire(Microsoft.AspNetCore.Builder.WebApplicationBuilder)~Microsoft.AspNetCore.Builder.WebApplicationBuilder",
+    Justification = "Sonarqube salah analisa, gak ada password di dalam method tersebut."
+)]
