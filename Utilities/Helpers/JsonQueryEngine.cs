@@ -316,9 +316,7 @@ internal partial class JsonQueryEngine
 
             // If we are inside a quote, ignore all breaking logic and continue scanning
             if (inQuote)
-            {
                 return (flowControl: true, value: (openParenCount, hasReachedTilde, inQuote));
-            }
 
             switch (c)
             {

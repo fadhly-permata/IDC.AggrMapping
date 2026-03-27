@@ -79,8 +79,6 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
             return await new APIResponseData<JArray?>().ChangeData(
                 valueFactoryAsync: async (ct) =>
                 {
-                    await Task.CompletedTask;
-
                     await pgHelper.ConnectAsync(cancellationToken: ct);
                     var (_, data) = await pgHelper.ExecuteScalarAsync(
                         spCallInfo: new PostgreHelper.SPCallInfo
