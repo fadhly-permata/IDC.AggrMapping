@@ -4,6 +4,7 @@ using IDC.AggrMapping.Utilities.Helpers;
 using IDC.AggrMapping.Utilities.Models;
 using IDC.Utilities;
 using IDC.Utilities.Data;
+using IDC.Utilities.Extensions;
 using IDC.Utilities.Models.API;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json.Linq;
@@ -25,7 +26,7 @@ namespace IDC.AggrMapping.Controllers;
 /// <remarks>
 ///     This controller provides endpoints for aggregating data.
 /// </remarks>
-[Route("AggrMapping/[controller]")]
+[Route(template: "AggrMapping/[controller]")]
 [ApiController]
 public class AggregateEngine(SystemLogging systemLogging, Caching caching, PostgreHelper pgHelper)
     : ControllerBase
@@ -74,7 +75,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     ///     - Message: Error message if status is "Failed"
     ///     - Data: JObject containing the log entries for the configuration
     /// </returns>
-    [Tags(tags: "Aggregation"), HttpPost("SingleAggregate")]
+    [Tags(tags: "Aggregation"), HttpPost(template: "SingleAggregate")]
     public async Task<APIResponseData<object?>> SingleAggregate(
         [FromBody] InsertAndAggregatePayloadModel payload,
         CancellationToken cancellationToken = default
@@ -82,6 +83,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     {
         var jqe = new JsonQueryEngine(jsonContext: (JObject)payload.Data);
         JObject result = [];
+        var errMsg = string.Empty;
 
         try
         {
@@ -98,18 +100,15 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
                 cancellationToken: cancellationToken
             );
 
-            if (cfg.Configurations == null || cfg.Configurations.Count == 0)
-                throw new DataException($"Aggregate configuration '{payload.Code}' not found.");
+            if (cfg.Configurations is not { Count: not 0 })
+                throw new DataException(s: $"Aggregate configuration '{payload.Code}' not found.");
 
-            result = await jqe.AggregateProcessorAsync(
-                queryConfig: cfg.Configurations,
-                cancellationToken: cancellationToken
-            );
-
+            result = jqe.AggregateProcessorAsync(queryConfig: cfg.Configurations);
             return new APIResponseData<object?>().ChangeData(data: result);
         }
         catch (Exception ex)
         {
+            errMsg = ex.GetExceptionDetails();
             return new APIResponseData<object?>()
                 .ChangeStatus(status: "Failed")
                 .ChangeMessage(
@@ -124,10 +123,13 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
                 logData: new LogDataModel
                 {
                     BatchCode = payload.BatchId,
+                    TotalProcess = payload.TotalProcess,
+                    ProcessIndex = payload.ProcessIndex,
                     ProcessType = LogDataModel.ProcessKind.ML_AGGREGATE,
                     ProcessCode = payload.Code,
                     Request = payload.Data.ToString(),
                     Response = result.ToString(),
+                    Log = errMsg,
                 },
                 pgHelper: pgHelper,
                 cancellationToken: cancellationToken
@@ -150,7 +152,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     /// <exception cref="DataException">
     ///     Thrown when the aggregate configuration is not found
     /// </exception>
-    [Tags(tags: "Aggregation"), HttpPost("MultipleAggregate")]
+    [Tags(tags: "Aggregation"), HttpPost(template: "MultipleAggregate")]
     public async Task<APIResponseData<object?>> MultipleAggregate(
         [FromBody] InsertAndAggregatePayloadModel payload,
         CancellationToken cancellationToken = default
@@ -171,17 +173,55 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
                 cancellationToken: cancellationToken
             );
 
-            if (cfg == null || cfg.Configurations == null || cfg.Configurations.Count == 0)
-                throw new DataException($"Aggregate configuration '{payload.Code}' not found.");
+            if (cfg is null || cfg.Configurations.Count == 0)
+                throw new DataException(s: $"Aggregate configuration '{payload.Code}' not found.");
 
             var result = new JArray();
+            var itemIndex = 0;
+            payload.TotalProcess = ((JArray)payload.Data).Count;
+
             foreach (var item in (JArray)payload.Data)
-                result.Add(
-                    await new JsonQueryEngine(jsonContext: (JObject)item).AggregateProcessorAsync(
-                        queryConfig: cfg.Configurations,
-                        cancellationToken: cancellationToken
-                    )
+            {
+                itemIndex++;
+                string? errorMessage = null;
+                var queryEngine = new JsonQueryEngine(jsonContext: (JObject)item);
+                JObject itemResult = [];
+
+                try
+                {
+                    itemResult = queryEngine.AggregateProcessorAsync(
+                        queryConfig: cfg.Configurations
+                    );
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = ex.Message;
+                }
+
+                // Buat dan simpan log untuk setiap item
+                var logData = new LogDataModel
+                {
+                    BatchCode = payload.BatchId,
+                    ProcessIndex = itemIndex,
+                    TotalProcess = payload.TotalProcess,
+                    ProcessType = LogDataModel.ProcessKind.ML_AGGREGATE,
+                    ProcessCode = payload.Code,
+                    Request = item.ToString(Newtonsoft.Json.Formatting.None),
+                    Response =
+                        errorMessage == null
+                            ? itemResult.ToString(Newtonsoft.Json.Formatting.None)
+                            : null,
+                    Log = errorMessage, // Jika null, akan menggunakan log internal dari queryEngine
+                };
+
+                await queryEngine.SaveLog(
+                    logData: logData,
+                    pgHelper: pgHelper,
+                    cancellationToken: cancellationToken
                 );
+
+                result.Add(itemResult);
+            }
 
             return new APIResponseData<object?>().ChangeData(data: result);
         }

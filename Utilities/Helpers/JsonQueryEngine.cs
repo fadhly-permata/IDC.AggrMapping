@@ -125,18 +125,15 @@ internal partial class JsonQueryEngine
         };
     }
 
-    internal async Task<JObject> AggregateProcessorAsync(
-        JObject? queryConfig,
-        CancellationToken cancellationToken = default
-    )
+    internal JObject AggregateProcessorAsync(JObject? queryConfig)
     {
         if (queryConfig == null)
             return [];
 
         JObject finalResult = [];
-        var tasks = new Dictionary<string, Task<object?>>();
 
-        // Start all queries in parallel
+        // Kita ubah menjadi sekuensial (foreach biasa tanpa Task.Run massal)
+        // agar '#hashtag' bisa membaca nilai yang sudah diproses sebelumnya.
         foreach (var property in queryConfig.Properties())
         {
             var queryKey = property.Name;
@@ -148,27 +145,25 @@ internal partial class JsonQueryEngine
                 continue;
             }
 
-            tasks[key: queryKey] = Task.Run(
-                function: object? () => ProcessMathOrQuery(queryStr: queryString),
-                cancellationToken: cancellationToken
-            );
-        }
+            try
+            {
+                // Eksekusi langsung secara sekuensial
+                var result = ProcessMathOrQuery(queryStr: queryString);
 
-        // Wait for all tasks to complete
-        var results = await Task.WhenAll(tasks: tasks.Values);
-        var keys = tasks.Keys.ToArray();
+                // Simpan ke dictionary internal agar baris berikutnya bisa melakukan lookup '#'
+                _processedResults[key: queryKey] = result;
 
-        // Process results
-        for (var i = 0; i < results.Length; i++)
-        {
-            var queryKey = keys[i];
-            var result = results[i];
-
-            _processedResults[key: queryKey] = result;
-            finalResult.Add(
-                propertyName: queryKey,
-                value: result != null ? JToken.FromObject(o: result) : JValue.CreateNull()
-            );
+                // Tambahkan ke hasil akhir
+                finalResult.Add(
+                    propertyName: queryKey,
+                    value: result != null ? JToken.FromObject(o: result) : JValue.CreateNull()
+                );
+            }
+            catch (Exception ex)
+            {
+                LogWritter(text: $"Error processing key '{queryKey}': {ex.Message}");
+                finalResult.Add(propertyName: queryKey, value: JValue.CreateNull());
+            }
         }
 
         return finalResult;
@@ -689,7 +684,14 @@ internal partial class JsonQueryEngine
         CancellationToken cancellationToken = default
     )
     {
-        logData.Log = _sbLog.ToString();
+        // Kalo gak ada error dari proses external, maka gunakan log internal
+        if (string.IsNullOrEmpty(value: logData.Log))
+        {
+            var log = _sbLog.ToString();
+            logData.Log = !string.IsNullOrWhiteSpace(value: log)
+                ? log
+                : "Process completed successfully.";
+        }
         await logData.Save(pgHelper: pgHelper, cancellationToken: cancellationToken);
     }
 }

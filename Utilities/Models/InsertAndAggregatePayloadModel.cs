@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.Data;
-using System.Text;
 using System.Text.Json.Serialization;
 using IDC.Utilities.Extensions;
 using IDC.Utilities.Interfaces;
@@ -28,11 +27,11 @@ public partial class InsertAndAggregatePayloadModel : BaseModel<InsertAndAggrega
     ///     Gets or sets the total items.
     /// </summary>
     [
-        JsonProperty(propertyName: "total_items"),
-        JsonPropertyName(name: "total_items"),
+        JsonProperty(propertyName: "total_process"),
+        JsonPropertyName(name: "total_process"),
         Range(minimum: 1, maximum: 100, ErrorMessage = "Total items must be between 1 and 100.")
     ]
-    public int TotalItems { get; set; } = 1;
+    internal int TotalProcess { get; set; } = 1;
 
     /// <summary>
     ///     Gets or sets the process index.
@@ -42,7 +41,7 @@ public partial class InsertAndAggregatePayloadModel : BaseModel<InsertAndAggrega
         JsonPropertyName(name: "process_index"),
         Range(minimum: 1, maximum: 100, ErrorMessage = "Process index must be between 1 and 100.")
     ]
-    public int ProcessIndex { get; set; } = 1;
+    internal int ProcessIndex { get; set; } = 1;
 
     /// <summary>
     ///     Gets or sets the code.
@@ -59,11 +58,6 @@ public partial class InsertAndAggregatePayloadModel : BaseModel<InsertAndAggrega
     /// </summary>
     [JsonProperty(propertyName: "data"), JsonPropertyName(name: "data")]
     public object Data { get; set; } = new();
-
-    /// <summary>
-    ///     Gets or sets the log message.
-    /// </summary>
-    internal StringBuilder LogMessage { get; set; } = new();
 }
 
 public partial class InsertAndAggregatePayloadModel
@@ -99,13 +93,13 @@ public partial class InsertAndAggregatePayloadModel
         Data.ThrowIfNull(paramName: nameof(Data));
         BatchId.ThrowIfNullOrWhitespace(paramName: nameof(BatchId));
 
-        if (TotalItems is < 1 or > 100)
+        if (TotalProcess is < 1 or > 100)
             throw new DataException(s: "Total items must be between 1 and 100.");
 
         if (ProcessIndex is < 1 or > 100)
             throw new DataException(s: "Process index must be between 1 and 100.");
 
-        if (ProcessIndex > TotalItems)
+        if (ProcessIndex > TotalProcess)
             throw new DataException(s: "Process index must be less than or equal to total items.");
 
         switch (Data)

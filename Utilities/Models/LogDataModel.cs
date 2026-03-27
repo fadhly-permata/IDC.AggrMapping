@@ -18,6 +18,9 @@ internal class LogDataModel
     }
 
     public required string BatchCode { get; set; }
+    public required int ProcessIndex { get; set; }
+    public required int TotalProcess { get; set; }
+
     public required ProcessKind ProcessType { get; set; }
     public required string ProcessCode { get; set; }
     public string? Request { get; set; }
@@ -35,6 +38,18 @@ internal class LogDataModel
                 Parameters =
                 [
                     new PostgreHelper.SPParameter { Name = "p_batch_no", Value = BatchCode },
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_process_index",
+                        Value = ProcessIndex,
+                        DataType = NpgsqlTypes.NpgsqlDbType.Integer,
+                    },
+                    new PostgreHelper.SPParameter
+                    {
+                        Name = "p_total_process",
+                        Value = TotalProcess,
+                        DataType = NpgsqlTypes.NpgsqlDbType.Integer,
+                    },
                     new PostgreHelper.SPParameter
                     {
                         Name = "p_process_type",
