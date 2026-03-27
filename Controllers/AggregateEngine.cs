@@ -63,8 +63,6 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     ///     - batch_id (string): Unique identifier for the batch
     ///     - code (string): Aggregation configuration code
     ///     - data (object): The data to be processed
-    ///     - total_items (int, optional): Total items in batch (default: 1)
-    ///     - process_index (int, optional): Current processing index (default: 1)
     /// </param>
     /// <param name="cancellationToken">
     ///     Cancellation token for the asynchronous operation
@@ -138,20 +136,43 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     }
 
     /// <summary>
-    ///     Aggregates multiple data
+    ///     Processes multiple data items for aggregation based on the provided configuration.
+    ///     Each item in the data array will be processed individually, and errors in one item
+    ///     will not stop the processing of subsequent items.
     /// </summary>
     /// <param name="payload">
-    ///     The data to be aggregated
+    ///     The payload containing:
+    ///     - batch_id: Unique identifier for the batch (required)
+    ///     - code: Aggregation configuration code (required)
+    ///     - data: Array of JSON objects to be processed (required, non-empty)
     /// </param>
     /// <param name="cancellationToken">
-    ///     Cancellation token
+    ///     Token to monitor for cancellation requests
     /// </param>
     /// <returns>
-    ///     APIResponseData containing the result
+    ///     Returns an <see cref="APIResponseData{T}"/> containing:
+    ///     - JArray of processed results for each input item
+    ///     - Error details if the overall operation fails
     /// </returns>
-    /// <exception cref="DataException">
-    ///     Thrown when the aggregate configuration is not found
-    /// </exception>
+    /// <remarks>
+    ///     Sample request:
+    ///     ```json
+    ///     POST /api/aggregate/MultipleAggregate
+    ///     {
+    ///         "batch_id": "batch-123",
+    ///         "code": "ACV1",
+    ///         "data": [
+    ///             { "field1": "value1" },
+    ///             { "field1": "value2" }
+    ///         ]
+    ///     }
+    ///     ```
+    ///
+    ///     Each item in the data array will be processed as follows:
+    ///     1. Individual aggregation using the specified configuration code
+    ///     2. Error handling per item (errors are logged but don't stop processing)
+    ///     3. Detailed logging for each processed item
+    /// </remarks>
     [Tags(tags: "Aggregation"), HttpPost(template: "MultipleAggregate")]
     public async Task<APIResponseData<object?>> MultipleAggregate(
         [FromBody] InsertAndAggregatePayloadModel payload,
@@ -184,38 +205,33 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
             {
                 itemIndex++;
                 string? errorMessage = null;
-                var queryEngine = new JsonQueryEngine(jsonContext: (JObject)item);
+                var jqe = new JsonQueryEngine(jsonContext: (JObject)item);
                 JObject itemResult = [];
 
                 try
                 {
-                    itemResult = queryEngine.AggregateProcessorAsync(
-                        queryConfig: cfg.Configurations
-                    );
+                    itemResult = jqe.AggregateProcessorAsync(queryConfig: cfg.Configurations);
                 }
                 catch (Exception ex)
                 {
                     errorMessage = ex.Message;
                 }
 
-                // Buat dan simpan log untuk setiap item
-                var logData = new LogDataModel
-                {
-                    BatchCode = payload.BatchId,
-                    ProcessIndex = itemIndex,
-                    TotalProcess = payload.TotalProcess,
-                    ProcessType = LogDataModel.ProcessKind.ML_AGGREGATE,
-                    ProcessCode = payload.Code,
-                    Request = item.ToString(Newtonsoft.Json.Formatting.None),
-                    Response =
-                        errorMessage == null
-                            ? itemResult.ToString(Newtonsoft.Json.Formatting.None)
-                            : null,
-                    Log = errorMessage, // Jika null, akan menggunakan log internal dari queryEngine
-                };
-
-                await queryEngine.SaveLog(
-                    logData: logData,
+                await jqe.SaveLog(
+                    logData: new LogDataModel
+                    {
+                        BatchCode = payload.BatchId,
+                        ProcessIndex = itemIndex,
+                        TotalProcess = payload.TotalProcess,
+                        ProcessType = LogDataModel.ProcessKind.ML_AGGREGATE,
+                        ProcessCode = payload.Code,
+                        Request = item.ToString(Newtonsoft.Json.Formatting.None),
+                        Response =
+                            errorMessage == null
+                                ? itemResult.ToString(Newtonsoft.Json.Formatting.None)
+                                : null,
+                        Log = errorMessage,
+                    },
                     pgHelper: pgHelper,
                     cancellationToken: cancellationToken
                 );
