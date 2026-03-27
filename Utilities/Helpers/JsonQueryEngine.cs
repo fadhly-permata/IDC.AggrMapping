@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Data;
 using System.Globalization;
 using System.Text;
@@ -18,16 +19,28 @@ internal partial class JsonQueryEngine
     private readonly Dictionary<string, object?> _processedResults = [];
     private readonly JObject _sourceData;
     private readonly StringBuilder _sbLog = new();
+    private readonly char[] _logBuffer = ArrayPool<char>.Shared.Rent(4096);
+    private int _logPosition;
+}
 
-    [GeneratedRegex(pattern: @"([\w#]+)\[\]\.([\w]+)(?:\[(\d+(?:\s*,\s*\d+)*)\])?")]
+internal partial class JsonQueryEngine
+{
+    [GeneratedRegex(
+        pattern: @"([\w#]+)\[\]\.([\w]+)(?:\[(\d+(?:\s*,\s*\d+)*)\])?",
+        options: RegexOptions.Compiled
+    )]
     private static partial Regex ArrayFieldQueryPatternRegex();
 
-    [GeneratedRegex(pattern: @"\bAVG\s*\(", options: RegexOptions.IgnoreCase, cultureName: "en-ID")]
+    [GeneratedRegex(
+        pattern: @"\bAVG\s*\(",
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        cultureName: "en-ID"
+    )]
     private static partial Regex AvgRegex();
 
     [GeneratedRegex(
         pattern: @"\bCOUNT\(([^()]+)\)",
-        options: RegexOptions.IgnoreCase,
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled,
         cultureName: "en-ID"
     )]
     private static partial Regex CountFunctionRegex();
@@ -35,27 +48,34 @@ internal partial class JsonQueryEngine
     // Untuk matching "COUNT(...)" sebagai keseluruhan string
     [GeneratedRegex(
         pattern: @"^COUNT\((.+?)\)$",
-        options: RegexOptions.IgnoreCase,
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled,
         cultureName: "en-ID"
     )]
     private static partial Regex FullCountExpressionRegex();
 
     // [GeneratedRegex(@"([\w]+\[\]|#[\w_]+)")]
-    [GeneratedRegex(pattern: @"([\w#]+\[\]|#[\w_]+)")]
+    [GeneratedRegex(pattern: @"([\w#]+\[\]|#[\w_]+)", options: RegexOptions.Compiled)]
     private static partial Regex SubQueryPatternRegex();
 
-    [GeneratedRegex("'([^']*)'")]
+    [GeneratedRegex("'([^']*)'", options: RegexOptions.Compiled)]
     private static partial Regex SingleQuotedContentMatcher();
 
-    [GeneratedRegex(@"\b([a-zA-Z_][\w\.]*)\b")]
+    [GeneratedRegex(@"\b([a-zA-Z_][\w\.]*)\b", options: RegexOptions.Compiled)]
     private static partial Regex AlphanumericDotPattern();
 
-    [GeneratedRegex(@"\bIN\s*\(([^)]+)\)")]
+    [GeneratedRegex(@"\bIN\s*\(([^)]+)\)", options: RegexOptions.Compiled)]
     private static partial Regex InClausePattern();
 
-    [GeneratedRegex(@"^(sum|avg|min|max|count)\s*\((.+)\)$", RegexOptions.IgnoreCase, "en-ID")]
+    [GeneratedRegex(
+        @"^(sum|avg|min|max|count)\s*\((.+)\)$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        "en-ID"
+    )]
     private static partial Regex AggregateFunctionPattern();
+}
 
+internal partial class JsonQueryEngine
+{
     /// <summary>
     ///     Konstruktor
     /// </summary>
@@ -838,10 +858,38 @@ internal partial class JsonQueryEngine
         return (flowControl: false, value: val != null ? 1.0 : 0.0);
     }
 
-    private void LogWritter(string text)
+    private void LogWritter(ReadOnlySpan<char> text)
     {
-        Console.WriteLine(value: $"[JsonQueryEngine Log] {text}");
-        _sbLog.AppendLine(value: text);
+        // 1. Log ke console (jika diperlukan)
+        Console.WriteLine($"[JsonQueryEngine] {text}");
+
+        // 2. Simpan ke buffer untuk performa tinggi
+        var logEntry = $"{text}{Environment.NewLine}";
+
+        if (logEntry.TryCopyTo(_logBuffer.AsSpan(_logPosition)))
+        {
+            _logPosition += logEntry.Length;
+
+            // Jika buffer hampir penuh, flush ke StringBuilder
+            if (_logBuffer.Length - _logPosition < 256)
+            {
+                FlushLogBuffer();
+            }
+        }
+        else
+        {
+            // Jika tidak cukup ruang, langsung tulis ke StringBuilder
+            _sbLog.Append(logEntry);
+        }
+    }
+
+    private void FlushLogBuffer()
+    {
+        if (_logPosition > 0)
+        {
+            _sbLog.Append(_logBuffer, 0, _logPosition);
+            _logPosition = 0;
+        }
     }
 
     internal async Task SaveLog(
@@ -850,15 +898,25 @@ internal partial class JsonQueryEngine
         CancellationToken cancellationToken = default
     )
     {
-        // Kalo gak ada error dari proses external, maka gunakan log internal
-        if (string.IsNullOrEmpty(value: logData.Log))
+        try
         {
-            var log = _sbLog.ToString();
-            logData.Log = !string.IsNullOrWhiteSpace(value: log)
-                ? log
-                : "Process completed successfully.";
+            // Pastikan semua log di buffer sudah di-flush
+            FlushLogBuffer();
+
+            if (string.IsNullOrEmpty(logData.Log))
+            {
+                logData.Log =
+                    _sbLog.Length > 0 ? _sbLog.ToString() : "Process completed successfully.";
+            }
+
+            await logData.Save(pgHelper: pgHelper, cancellationToken: cancellationToken);
         }
-        await logData.Save(pgHelper: pgHelper, cancellationToken: cancellationToken);
+        finally
+        {
+            // Reset buffer setelah disimpan
+            _sbLog.Clear();
+            _logPosition = 0;
+        }
     }
 }
 
