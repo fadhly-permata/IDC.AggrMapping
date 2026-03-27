@@ -181,56 +181,6 @@ internal partial class JsonQueryEngine
         return expr.Eval();
     }
 
-    private static DataTable CreateFullDataTable(JArray array)
-    {
-        DataTable dt = new();
-        if (array.Count == 0)
-            return dt;
-
-        var properties = array
-            .Children<JObject>()
-            .SelectMany(selector: IEnumerable<JProperty> (o) => o.Properties())
-            .Select(selector: string (p) => p.Name)
-            .Distinct();
-
-        foreach (var propName in properties)
-        {
-            dt.Columns.Add(
-                columnName: propName,
-                type: array
-                    .Children<JObject>()
-                    .Select(selector: JToken? (o) => o[propertyName: propName])
-                    .FirstOrDefault(predicate: bool (v) => v != null && v.Type != JTokenType.Null)
-                    ?.Type switch
-                {
-                    JTokenType.Integer or JTokenType.Float => typeof(double),
-                    JTokenType.Boolean => typeof(bool),
-                    JTokenType.Date => typeof(DateTime),
-                    _ => typeof(string),
-                }
-            );
-        }
-
-        foreach (var obj in array.Children<JObject>())
-        {
-            var row = dt.NewRow();
-
-            foreach (DataColumn col in dt.Columns)
-            {
-                var val = obj[propertyName: col.ColumnName];
-
-                row[columnName: col.ColumnName] =
-                    (val == null || val.Type == JTokenType.Null)
-                        ? DBNull.Value
-                        : val.ToObject(objectType: col.DataType);
-            }
-
-            dt.Rows.Add(row: row);
-        }
-
-        return dt;
-    }
-
     private static string EvaluateCountCalls(string templateExpr)
     {
         templateExpr = CountFunctionRegex()
@@ -370,31 +320,6 @@ internal partial class JsonQueryEngine
         return counter == 0 ? closePos - 1 : -1;
     }
 
-    private static string PrepareSqlFilter(string? filter)
-    {
-        if (string.IsNullOrWhiteSpace(value: filter))
-            return "";
-
-        foreach (
-            var (oldValue, newValue) in new Dictionary<string, string>
-            {
-                { "&&", " AND " },
-                { "||", " OR " },
-                { "==", "=" },
-                { "!=", "<>" },
-                { "=>", ">=" },
-                { "=<", "<=" },
-            }
-        )
-            filter = filter.Replace(
-                oldValue: oldValue,
-                newValue: newValue,
-                comparisonType: StringComparison.Ordinal
-            );
-
-        return filter;
-    }
-
     private static List<string> SplitArgumentsIgnoreBrackets(string args)
     {
         var result = new List<string>();
@@ -502,7 +427,6 @@ internal partial class JsonQueryEngine
             if (_processedResults.TryGetValue(key: key, value: out var val))
                 return val;
 
-            // Log if hashtag key is not found
             LogWritter(text: $"Lookup field '#{key}' not found in processed results.");
             return null;
         }
@@ -523,19 +447,119 @@ internal partial class JsonQueryEngine
         var fieldName = match.Groups[groupnum: 2].Value;
         var indexCsv = match.Groups[groupnum: 3].Value;
 
-        // 2. Handling Missing Array
-        if (_sourceData[propertyName: arrayName] is JArray targetArray)
+        // 2. Handling array or object
+        var token = _sourceData.SelectToken(path: arrayName);
+
+        if (token is JArray targetArray)
+        {
             return Projected(
                 queryStr: queryStr,
                 targetArray: targetArray,
                 filterPart: filterPart,
                 sortPart: sortPart,
                 fieldName: fieldName,
-                s: indexCsv
+                indexCsv: indexCsv
             );
+        }
+        else if (token is JObject singleObject)
+        {
+            // Handle single object as array with one element
+            return Projected(
+                queryStr: queryStr,
+                targetArray: new JArray(content: singleObject),
+                filterPart: filterPart,
+                sortPart: sortPart,
+                fieldName: fieldName,
+                indexCsv: indexCsv
+            );
+        }
 
-        LogWritter(text: $"Array '{arrayName}' not found in source JSON for query: '{queryStr}'.");
+        LogWritter(
+            text: $"Array or object '{arrayName}' not found in source JSON for query: '{queryStr}'."
+        );
         return null;
+    }
+
+    private static DataTable CreateFlattenedDataTable(JArray array)
+    {
+        DataTable dt = new();
+        var columnNames = new HashSet<string>();
+
+        // First pass: Collect all possible column names
+        foreach (var item in array.Children<JObject>())
+            ProcessItemForColumns(item: item, columnNames: columnNames, dt: dt);
+
+        // Second pass: Populate rows
+        foreach (var item in array.Children<JObject>())
+        {
+            var row = dt.NewRow();
+            ProcessItemForRows(item: item, row: row, dt: dt);
+            dt.Rows.Add(row: row);
+        }
+
+        return dt;
+
+        static void ProcessItemForColumns(JObject item, HashSet<string> columnNames, DataTable dt)
+        {
+            foreach (var prop in item.Properties())
+                if (prop.Value is JObject nestedObj)
+                    foreach (var nestedProp in nestedObj.Properties())
+                        AddColumnIfNotExists(
+                            columnName: $"{prop.Name}_{nestedProp.Name}",
+                            columnNames: columnNames,
+                            dt: dt
+                        );
+                else
+                    AddColumnIfNotExists(columnName: prop.Name, columnNames: columnNames, dt: dt);
+        }
+
+        static void AddColumnIfNotExists(
+            string columnName,
+            HashSet<string> columnNames,
+            DataTable dt
+        )
+        {
+            if (columnNames.Add(item: columnName))
+                dt.Columns.Add(columnName: columnName, type: typeof(object));
+        }
+
+        static void ProcessItemForRows(JObject item, DataRow row, DataTable dt)
+        {
+            foreach (DataColumn col in dt.Columns)
+                row[column: col] = col.ColumnName.Contains(value: '_')
+                    ? GetNestedValue(item: item, columnName: col.ColumnName)
+                    : GetSimpleValue(item: item, columnName: col.ColumnName);
+        }
+
+        static object GetNestedValue(JObject item, string columnName)
+        {
+            var parts = columnName.Split(separator: '_', count: 2);
+            return (item[parts[0]]?[parts[1]])?.ToObject<object>() ?? DBNull.Value;
+        }
+
+        static object GetSimpleValue(JObject item, string columnName) =>
+            item[propertyName: columnName]?.ToObject<object>() ?? DBNull.Value;
+    }
+
+    private static object? ExtractItemsByIndices(string indexCsv, List<object?> projected)
+    {
+        if (string.IsNullOrWhiteSpace(value: indexCsv))
+            return projected.Count == 1 ? projected[index: 0] : projected;
+
+        var indices = indexCsv
+            .Split(separator: ',')
+            .Select(selector: s => s.Trim())
+            .Where(predicate: s => !string.IsNullOrEmpty(value: s))
+            .Select(selector: s => int.TryParse(s: s, result: out var i) ? i : -1)
+            .Where(predicate: i => i >= 0 && i < projected.Count)
+            .ToList();
+
+        if (indices.Count == 0)
+            return null;
+
+        var results = indices.Select(selector: i => projected[index: i]).ToList();
+
+        return results.Count == 1 ? results[index: 0] : results;
     }
 
     private object? Projected(
@@ -544,70 +568,244 @@ internal partial class JsonQueryEngine
         string? filterPart,
         string? sortPart,
         string fieldName,
-        string s
+        string indexCsv
     )
     {
-        using var dt = CreateFullDataTable(array: targetArray);
-        var sqlFilter = PrepareSqlFilter(filter: filterPart);
-        var sqlSort = (sortPart ?? "").Replace(oldValue: "==", newValue: "=");
-
         try
         {
-            var rows = dt.Select(filterExpression: sqlFilter, sort: sqlSort);
-            var projected = rows.Select(
-                    selector: object? (r) =>
-                        r[columnName: fieldName] == DBNull.Value ? null : r[columnName: fieldName]
+            using var dt = CreateFlattenedDataTable(array: targetArray);
+
+            // Convert fieldName to column name (replace . with _)
+            string columnName = fieldName.Contains(value: '.')
+                ? fieldName.Replace(oldChar: '.', newChar: '_')
+                : fieldName;
+
+            // Process filter part
+            string? sqlFilter = null;
+            if (!string.IsNullOrWhiteSpace(value: filterPart))
+            {
+                sqlFilter = ConvertFilterExpression(filter: filterPart);
+                LogWritter(text: $"Converted filter: {sqlFilter}");
+            }
+
+            // Process sort part
+            string? sqlSort = null;
+            if (!string.IsNullOrWhiteSpace(value: sortPart))
+            {
+                sqlSort = ConvertSortExpression(sort: sortPart);
+                LogWritter(text: $"Converted sort: {sqlSort}");
+            }
+
+            // Verify column exists
+            if (!dt.Columns.Contains(name: columnName))
+            {
+                LogWritter(
+                    text: $"Column '{columnName}' not found. Available columns: {string.Join(separator: ", ", values: dt.Columns.Cast<DataColumn>().Select(selector: c => c.ColumnName))}"
+                );
+                return null;
+            }
+
+            // Execute query
+            var rows = string.IsNullOrEmpty(value: sqlFilter)
+                ? dt.Select()
+                : dt.Select(filterExpression: sqlFilter, sort: sqlSort ?? "");
+
+            var projected = rows.Select(selector: r =>
+                    r[columnName: columnName] == DBNull.Value ? null : r[columnName: columnName]
                 )
                 .ToList();
 
-            // 3. Handling Specific Indices Lookup
-            if (!string.IsNullOrEmpty(value: s))
+            // Handle indices
+            if (!string.IsNullOrEmpty(value: indexCsv))
             {
-                var result = ExtractItemsByIndices(indexCsv: s, projected: projected);
-                if (result == null)
-                    LogWritter(
-                        text: $"Indices [{s}] out of range or no data for field '{fieldName}' in query: '{queryStr}'."
-                    );
-
-                return result;
+                return ExtractItemsByIndices(indexCsv: indexCsv, projected: projected) ?? projected;
             }
 
-            // 4. Handling Empty Filter Result
-            if (projected.Count != 0)
-                return projected.Count == 1 ? projected[index: 0] : projected;
-
-            LogWritter(text: $"No data matches the filter/criteria for query: '{queryStr}'.");
-            return null;
+            return projected.Count switch
+            {
+                0 => null,
+                1 => projected[index: 0],
+                _ => projected,
+            };
         }
         catch (Exception ex)
         {
-            // 5. Handling SQL or Processing Error
-            LogWritter(text: $"Error during data evaluation for '{queryStr}': {ex.Message}");
+            LogWritter(text: $"Error in Projected: {ex.Message}");
             return null;
         }
+    }
 
-        static object? ExtractItemsByIndices(string indexCsv, List<object?> projected)
+    private string ConvertFilterExpression(string filter)
+    {
+        // Handle quoted strings first
+        var result = Regex.Replace(
+            input: filter,
+            pattern: @"'([^']*)'",
+            evaluator: m =>
+            {
+                // Keep the quoted string as is
+                return m.Value;
+            }
+        );
+
+        // Convert operators
+        result = result
+            .Replace(oldValue: "==", newValue: "=")
+            .Replace(oldValue: "!=", newValue: "<>")
+            .Replace(oldValue: "&&", newValue: " AND ")
+            .Replace(oldValue: "||", newValue: " OR ")
+            .Replace(oldValue: "=>", newValue: ">=")
+            .Replace(oldValue: "=<", newValue: "<=");
+
+        // Convert property names (replace . with _)
+        result = Regex.Replace(
+            input: result,
+            pattern: @"\b([a-zA-Z_][\w\.]*)\b",
+            evaluator: m =>
+            {
+                var prop = m.Value;
+                return IsSqlKeyword(word: prop) ? prop : prop.Replace(oldChar: '.', newChar: '_');
+            }
+        );
+
+        // Handle IN clauses
+        result = Regex.Replace(
+            input: result,
+            pattern: @"\bIN\s*\(([^)]+)\)",
+            evaluator: m =>
+            {
+                var values = m.Groups[groupnum: 1]
+                    .Value.Split(separator: ',')
+                    .Select(selector: v => v.Trim())
+                    .Where(predicate: v => !string.IsNullOrEmpty(value: v));
+                return $"IN ({string.Join(separator: ", ", values: values)})";
+            }
+        );
+
+        return result;
+    }
+
+    private static string ConvertSortExpression(string sort)
+    {
+        var parts = sort.Split(
+            separator: new[] { ' ' },
+            options: StringSplitOptions.RemoveEmptyEntries
+        );
+        var sortFields = new List<string>();
+        string? currentField = null;
+
+        foreach (var part in parts)
         {
-            var indices = indexCsv
-                .Split(separator: ',')
-                .Select(selector: int (s) => int.Parse(s: s.Trim()))
-                .ToList();
-
-            var indexedResults = (
-                from i in indices
-                where i >= 0 && i < projected.Count
-                select projected[index: i]
-            ).ToList();
-
-            if (indexedResults.Count == 0)
-                return null;
-
-            return indices.Count > 1 ? indexedResults : indexedResults.FirstOrDefault();
+            if (
+                part.Equals(value: "ASC", comparisonType: StringComparison.OrdinalIgnoreCase)
+                || part.Equals(value: "DESC", comparisonType: StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                if (currentField != null)
+                {
+                    sortFields[^1] += $" {part.ToUpper()}";
+                    currentField = null;
+                }
+            }
+            else
+            {
+                // Convert property names (replace . with _)
+                var field = part.Replace(oldChar: '.', newChar: '_');
+                sortFields.Add(item: field);
+                currentField = field;
+            }
         }
+
+        return string.Join(separator: ", ", values: sortFields);
+    }
+
+    private static bool IsSqlKeyword(string word)
+    {
+        var keywords = new HashSet<string>(comparer: StringComparer.OrdinalIgnoreCase)
+        {
+            "AND",
+            "OR",
+            "NOT",
+            "IN",
+            "LIKE",
+            "IS",
+            "NULL",
+            "TRUE",
+            "FALSE",
+            "BETWEEN",
+            "EXISTS",
+            "DISTINCT",
+            "ASC",
+            "DESC",
+            "SELECT",
+            "FROM",
+            "WHERE",
+            "ORDER",
+            "BY",
+            "GROUP",
+            "HAVING",
+            "JOIN",
+            "INNER",
+            "OUTER",
+            "LEFT",
+            "RIGHT",
+            "ON",
+            "AS",
+            "TOP",
+            "COUNT",
+            "SUM",
+            "AVG",
+            "MIN",
+            "MAX",
+            "CASE",
+            "WHEN",
+            "THEN",
+            "ELSE",
+            "END",
+        };
+
+        return keywords.Contains(item: word) || keywords.Contains(item: word.ToUpper());
     }
 
     private object? ProcessMathOrQuery(string queryStr)
     {
+        // Handle aggregate functions first
+        var aggregateMatch = Regex.Match(
+            input: queryStr,
+            pattern: @"^(sum|avg|min|max|count)\s*\((.+)\)$",
+            options: RegexOptions.IgnoreCase
+        );
+        if (aggregateMatch.Success)
+        {
+            var funcName = aggregateMatch.Groups[groupnum: 1].Value.ToLowerInvariant();
+            var innerQuery = aggregateMatch.Groups[groupnum: 2].Value.Trim();
+
+            var result = EvaluateQuery(queryStr: innerQuery);
+            if (result is IEnumerable<object> collection)
+            {
+                if (
+                    AggregateFunction.TryApply(
+                        functionName: funcName,
+                        values: collection,
+                        result: out var aggregateResult
+                    )
+                )
+                    return aggregateResult;
+            }
+            else if (result != null)
+            {
+                if (
+                    AggregateFunction.TryApply(
+                        functionName: funcName,
+                        values: new[] { result },
+                        result: out var aggregateResult
+                    )
+                )
+                    return aggregateResult;
+            }
+            return 0;
+        }
+
         // Normalisasi nama fungsi karna mathEval tidak memiliki fungsi
         // dengan nama AVG, yang ada adalah AVERAGE
         var templateExpr = AvgRegex().Replace(input: queryStr, replacement: "AVERAGE(");
@@ -691,5 +889,62 @@ internal partial class JsonQueryEngine
                 : "Process completed successfully.";
         }
         await logData.Save(pgHelper: pgHelper, cancellationToken: cancellationToken);
+    }
+}
+
+internal static class AggregateFunction
+{
+    private static readonly Dictionary<string, Func<IEnumerable<object?>, double>> AggregateFuncs =
+        new(comparer: StringComparer.OrdinalIgnoreCase)
+        {
+            {
+                "sum",
+                static values =>
+                    values
+                        .Where(predicate: static v => v != null)
+                        .Sum(selector: static v => Convert.ToDouble(value: v))
+            },
+            {
+                "avg",
+                static values =>
+                    values
+                        .Where(predicate: static v => v != null)
+                        .Average(selector: static v => Convert.ToDouble(value: v))
+            },
+            {
+                "min",
+                static values =>
+                    values
+                        .Where(predicate: static v => v != null)
+                        .Min(selector: static v => Convert.ToDouble(value: v))
+            },
+            {
+                "max",
+                static values =>
+                    values
+                        .Where(predicate: static v => v != null)
+                        .Max(selector: static v => Convert.ToDouble(value: v))
+            },
+            { "count", static values => values.Count(predicate: static v => v != null) },
+        };
+
+    public static bool TryApply(string functionName, IEnumerable<object?> values, out double result)
+    {
+        if (AggregateFuncs.TryGetValue(key: functionName, value: out var func))
+        {
+            try
+            {
+                result = func(arg: values);
+                return true;
+            }
+            catch
+            {
+                // Handle empty collection cases
+                result = 0;
+                return false;
+            }
+        }
+        result = 0;
+        return false;
     }
 }
