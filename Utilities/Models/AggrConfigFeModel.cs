@@ -19,7 +19,11 @@ public class AggrConfigFeModel
         ///     The unique numeric identifier of the aggregation configuration.
         ///     Must be a positive integer greater than zero.
         /// </summary>
-        [Range(1, int.MaxValue, ErrorMessage = "ID must be a positive integer greater than zero.")]
+        [Range(
+            minimum: 1,
+            maximum: int.MaxValue,
+            ErrorMessage = "ID must be a positive integer greater than zero."
+        )]
         public int Id { get; set; }
     }
 
@@ -36,7 +40,7 @@ public class AggrConfigFeModel
         ///     Can only contain alphanumeric characters, spaces, and underscores
         /// </summary>
         [Required(ErrorMessage = "User is required", AllowEmptyStrings = false)]
-        [RegularExpression(@"\S+", ErrorMessage = "User cannot be empty or whitespace")]
+        [RegularExpression(pattern: @"\S+", ErrorMessage = "User cannot be empty or whitespace")]
         public string User { get; set; } = string.Empty;
     }
 
@@ -53,7 +57,7 @@ public class AggrConfigFeModel
         /// </summary>
         [Required(ErrorMessage = "Name is required")]
         [RegularExpression(
-            "^[a-zA-Z0-9 _]+$",
+            pattern: "^[a-zA-Z0-9 _]+$",
             ErrorMessage = "Name can only contain alphanumeric characters, spaces, and underscores"
         )]
         public string Name { get; set; } = string.Empty;
@@ -72,7 +76,7 @@ public class AggrConfigFeModel
         /// </summary>
         [Required(ErrorMessage = "Code is required", AllowEmptyStrings = false)]
         [RegularExpression(
-            @"^ACV\d+$",
+            pattern: @"^ACV\d+$",
             ErrorMessage = "Code must be in format 'ACV' followed by numbers (e.g., ACV123)"
         )]
         public string Code { get; set; } = string.Empty;
@@ -183,7 +187,11 @@ public class AggrConfigFeModel
         ///     The unique numeric identifier of the aggregation configuration.
         ///     Must be a positive integer greater than zero.
         /// </summary>
-        [Range(1, int.MaxValue, ErrorMessage = "ID must be a positive integer greater than zero.")]
+        [Range(
+            minimum: 1,
+            maximum: int.MaxValue,
+            ErrorMessage = "ID must be a positive integer greater than zero."
+        )]
         public int Id { get; set; }
     }
 }
