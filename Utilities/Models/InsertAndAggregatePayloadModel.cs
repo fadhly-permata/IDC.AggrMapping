@@ -93,27 +93,28 @@ public partial class InsertAndAggregatePayloadModel
 
     internal async Task Validate()
     {
+        await Task.CompletedTask;
+
         Code.ThrowIfNullOrWhitespace(paramName: nameof(Code));
         Data.ThrowIfNull(paramName: nameof(Data));
-
         BatchId.ThrowIfNullOrWhitespace(paramName: nameof(BatchId));
-        if (TotalItems < 1 || TotalItems > 100)
+
+        if (TotalItems is < 1 or > 100)
             throw new DataException(s: "Total items must be between 1 and 100.");
 
-        if (ProcessIndex < 1 || ProcessIndex > 100)
+        if (ProcessIndex is < 1 or > 100)
             throw new DataException(s: "Process index must be between 1 and 100.");
 
         if (ProcessIndex > TotalItems)
             throw new DataException(s: "Process index must be less than or equal to total items.");
 
-        if (Data is null)
-            throw new DataException(s: "Data can not be null.");
-
-        if (Data is JArray { Count: 0 })
-            throw new DataException(s: "Data can not be empty.");
-        else if (Data is JObject { Count: 0 })
-            throw new DataException(s: "Data can not be empty.");
-
-        await Task.CompletedTask;
+        switch (Data)
+        {
+            case null:
+                throw new DataException(s: "Data can not be null.");
+            case JArray { Count: 0 }
+            or JObject { Count: 0 }:
+                throw new DataException(s: "Data can not be empty.");
+        }
     }
 }

@@ -151,7 +151,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     /// </exception>
     [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "Detail")]
     public async Task<APIResponseData<JObject?>> Detail(
-        AggrConfigFeModel.IdOnly payload,
+        AggConfigFeModel.IdOnly payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -234,7 +234,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     /// </returns>
     [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Delete")]
     public async Task<APIResponseData<JObject?>> Delete(
-        AggrConfigFeModel.IdAndUser payload,
+        AggConfigFeModel.IdAndUser payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -317,7 +317,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     /// </returns>
     [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Rollback")]
     public async Task<APIResponseData<JObject?>> Rollback(
-        AggrConfigFeModel.IdAndUser payload,
+        AggConfigFeModel.IdAndUser payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -398,7 +398,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     /// </returns>
     [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Log")]
     public async Task<APIResponseData<JObject?>> Log(
-        AggrConfigFeModel.CodeOnly payload,
+        AggConfigFeModel.CodeOnly payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -477,7 +477,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     /// </returns>
     [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Copy")]
     public async Task<APIResponseData<JObject?>> Copy(
-        AggrConfigFeModel.CopyData payload,
+        AggConfigFeModel.CopyData payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -571,7 +571,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     /// </returns>
     [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Approval")]
     public async Task<APIResponseData<JObject?>> Approval(
-        AggrConfigFeModel.AggrConfigApproval payload,
+        AggConfigFeModel.AggrConfigApproval payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -702,7 +702,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     /// </returns>
     [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Insert")]
     public async Task<APIResponseData<JObject?>> Insert(
-        AggrConfigFeModel.Insert payload,
+        AggConfigFeModel.Insert payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -856,7 +856,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     /// </returns>
     [Tags(tags: "Aggregation Config For FE"), HttpPost(template: "AggrConfigIdAndUser/Update")]
     public async Task<APIResponseData<JObject?>> Update(
-        AggrConfigFeModel.Update payload,
+        AggConfigFeModel.Update payload,
         CancellationToken cancellationToken = default
     )
     {

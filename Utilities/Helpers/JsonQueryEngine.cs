@@ -2,6 +2,8 @@ using System.Data;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using IDC.AggrMapping.Utilities.Models;
+using IDC.Utilities.Data;
 using IDC.Utilities.Extensions;
 using Newtonsoft.Json.Linq;
 using org.matheval;
@@ -15,7 +17,7 @@ internal partial class JsonQueryEngine
     );
     private readonly Dictionary<string, object?> _processedResults = [];
     private readonly JObject _sourceData;
-    internal readonly StringBuilder Log = new();
+    private readonly StringBuilder _sbLog = new();
 
     [GeneratedRegex(pattern: @"([\w#]+)\[\]\.([\w]+)(?:\[(\d+(?:\s*,\s*\d+)*)\])?")]
     private static partial Regex ArrayFieldQueryPatternRegex();
@@ -123,7 +125,7 @@ internal partial class JsonQueryEngine
         };
     }
 
-    public async Task<JObject> AggregateProcessorAsync(
+    internal async Task<JObject> AggregateProcessorAsync(
         JObject? queryConfig,
         CancellationToken cancellationToken = default
     )
@@ -678,6 +680,16 @@ internal partial class JsonQueryEngine
     private void LogWritter(string text)
     {
         Console.WriteLine(value: $"[JsonQueryEngine Log] {text}");
-        Log.AppendLine(value: text);
+        _sbLog.AppendLine(value: text);
+    }
+
+    internal async Task SaveLog(
+        LogDataModel logData,
+        PostgreHelper pgHelper,
+        CancellationToken cancellationToken = default
+    )
+    {
+        logData.Log = _sbLog.ToString();
+        await logData.Save(pgHelper: pgHelper, cancellationToken: cancellationToken);
     }
 }

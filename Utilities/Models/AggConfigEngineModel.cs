@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 
 namespace IDC.AggrMapping.Utilities.Models;
 
-internal partial class AggregateEngineConfigModel : BaseModel<AggregateEngineConfigModel>
+internal partial class AggConfigEngineModel : BaseModel<AggConfigEngineModel>
 {
     [
         JsonProperty(propertyName: "aggregate_code"),
@@ -29,16 +29,16 @@ internal partial class AggregateEngineConfigModel : BaseModel<AggregateEngineCon
     public JObject Configurations { get; set; } = [];
 }
 
-internal partial class AggregateEngineConfigModel
+internal partial class AggConfigEngineModel
 {
-    internal async Task<AggregateEngineConfigModel> Load(
+    internal async Task<AggConfigEngineModel> Load(
         string aggregateCode,
         PostgreHelper pgHelper,
         Caching caching,
         CancellationToken cancellationToken = default
     )
     {
-        aggregateCode.ThrowIfNullOrWhitespace(nameof(aggregateCode));
+        aggregateCode.ThrowIfNullOrWhitespace(paramName: nameof(aggregateCode));
 
         var result =
             await caching.GetOrSetAsync(
@@ -64,19 +64,20 @@ internal partial class AggregateEngineConfigModel
                         cancellationToken: cancellationToken
                     );
 
-                    return new AggregateEngineConfigModel
+                    return new AggConfigEngineModel
                     {
                         Code = aggregateCode,
                         Configurations = JObject.Parse(
                             json: data as string
                                 ?? throw new DataException(
-                                    $"Aggregate configuration '{aggregateCode}' not found."
+                                    s: $"Aggregate configuration '{aggregateCode}' not found."
                                 )
                         ),
                     };
                 },
                 expirationRenewal: true
-            ) ?? throw new DataException($"Aggregate configuration '{aggregateCode}' not found.");
+            )
+            ?? throw new DataException(s: $"Aggregate configuration '{aggregateCode}' not found.");
 
         return result;
     }

@@ -8,7 +8,7 @@ namespace IDC.AggrMapping.Utilities.Models;
 /// <summary>
 ///     Class AggrConfigFe Model
 /// </summary>
-public class AggrConfigFeModel
+public class AggConfigFeModel
 {
     /// <summary>
     ///     Represents the unique identifier for an aggregation configuration.
