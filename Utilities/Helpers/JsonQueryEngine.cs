@@ -44,6 +44,18 @@ internal partial class JsonQueryEngine
     [GeneratedRegex(pattern: @"([\w#]+\[\]|#[\w_]+)")]
     private static partial Regex SubQueryPatternRegex();
 
+    [GeneratedRegex("'([^']*)'")]
+    private static partial Regex SingleQuotedContentMatcher();
+
+    [GeneratedRegex(@"\b([a-zA-Z_][\w\.]*)\b")]
+    private static partial Regex AlphanumericDotPattern();
+
+    [GeneratedRegex(@"\bIN\s*\(([^)]+)\)")]
+    private static partial Regex InClausePattern();
+
+    [GeneratedRegex(@"^(sum|avg|min|max|count)\s*\((.+)\)$", RegexOptions.IgnoreCase, "en-ID")]
+    private static partial Regex AggregateFunctionPattern();
+
     /// <summary>
     ///     Konstruktor
     /// </summary>
@@ -132,8 +144,6 @@ internal partial class JsonQueryEngine
 
         JObject finalResult = [];
 
-        // Kita ubah menjadi sekuensial (foreach biasa tanpa Task.Run massal)
-        // agar '#hashtag' bisa membaca nilai yang sudah diproses sebelumnya.
         foreach (var property in queryConfig.Properties())
         {
             var queryKey = property.Name;
@@ -147,13 +157,8 @@ internal partial class JsonQueryEngine
 
             try
             {
-                // Eksekusi langsung secara sekuensial
                 var result = ProcessMathOrQuery(queryStr: queryString);
-
-                // Simpan ke dictionary internal agar baris berikutnya bisa melakukan lookup '#'
                 _processedResults[key: queryKey] = result;
-
-                // Tambahkan ke hasil akhir
                 finalResult.Add(
                     propertyName: queryKey,
                     value: result != null ? JToken.FromObject(o: result) : JValue.CreateNull()
@@ -181,9 +186,8 @@ internal partial class JsonQueryEngine
         return expr.Eval();
     }
 
-    private static string EvaluateCountCalls(string templateExpr)
-    {
-        templateExpr = CountFunctionRegex()
+    private static string EvaluateCountCalls(string templateExpr) =>
+        CountFunctionRegex()
             .Replace(
                 input: templateExpr,
                 evaluator: static string (m) =>
@@ -192,8 +196,6 @@ internal partial class JsonQueryEngine
                         .Count(predicate: static bool (s) => !string.IsNullOrWhiteSpace(value: s))
                         .ToString()
             );
-        return templateExpr;
-    }
 
     private static void ExtractSubQueries(string templateExpr, List<string> subQueries)
     {
@@ -209,15 +211,13 @@ internal partial class JsonQueryEngine
             var startIndex = m.Index;
             var currentIndex = startIndex + m.Length;
 
-            // Initialization of scanning states
             var openParenCount = 0;
             var hasReachedTilde = false;
-            var inQuote = false; // New state to track if we are inside a string literal
+            var inQuote = false;
 
             while (currentIndex < templateExpr.Length)
             {
-                // Process the current character and update states
-                var result = HandleCharInFilterExpression(
+                var (flowControl, value) = HandleCharInFilterExpression(
                     templateExpr: templateExpr,
                     currentIndex: currentIndex,
                     openParenCount: openParenCount,
@@ -225,13 +225,12 @@ internal partial class JsonQueryEngine
                     inQuote: inQuote
                 );
 
-                if (!result.flowControl)
+                if (!flowControl)
                     break;
 
-                // Update local states for the next iteration
-                openParenCount = result.value.openParenCount;
-                hasReachedTilde = result.value.hasReachedTilde;
-                inQuote = result.value.inQuote;
+                openParenCount = value.openParenCount;
+                hasReachedTilde = value.hasReachedTilde;
+                inQuote = value.inQuote;
 
                 currentIndex++;
             }
@@ -243,7 +242,6 @@ internal partial class JsonQueryEngine
 
         return;
 
-        // Helper function to determine scanning flow and state updates
         static (
             bool flowControl,
             (int openParenCount, bool hasReachedTilde, bool inQuote) value
@@ -450,34 +448,31 @@ internal partial class JsonQueryEngine
         // 2. Handling array or object
         var token = _sourceData.SelectToken(path: arrayName);
 
-        if (token is JArray targetArray)
+        switch (token)
         {
-            return Projected(
-                queryStr: queryStr,
-                targetArray: targetArray,
-                filterPart: filterPart,
-                sortPart: sortPart,
-                fieldName: fieldName,
-                indexCsv: indexCsv
-            );
+            case JArray targetArray:
+                return Projected(
+                    targetArray: targetArray,
+                    filterPart: filterPart,
+                    sortPart: sortPart,
+                    fieldName: fieldName,
+                    indexCsv: indexCsv
+                );
+            case JObject singleObject:
+                // Handle single object as array with one element
+                return Projected(
+                    targetArray: new JArray(content: singleObject),
+                    filterPart: filterPart,
+                    sortPart: sortPart,
+                    fieldName: fieldName,
+                    indexCsv: indexCsv
+                );
+            default:
+                LogWritter(
+                    text: $"Array or object '{arrayName}' not found in source JSON for query: '{queryStr}'."
+                );
+                return null;
         }
-        else if (token is JObject singleObject)
-        {
-            // Handle single object as array with one element
-            return Projected(
-                queryStr: queryStr,
-                targetArray: new JArray(content: singleObject),
-                filterPart: filterPart,
-                sortPart: sortPart,
-                fieldName: fieldName,
-                indexCsv: indexCsv
-            );
-        }
-
-        LogWritter(
-            text: $"Array or object '{arrayName}' not found in source JSON for query: '{queryStr}'."
-        );
-        return null;
     }
 
     private static DataTable CreateFlattenedDataTable(JArray array)
@@ -563,7 +558,6 @@ internal partial class JsonQueryEngine
     }
 
     private object? Projected(
-        string queryStr,
         JArray targetArray,
         string? filterPart,
         string? sortPart,
@@ -576,25 +570,19 @@ internal partial class JsonQueryEngine
             using var dt = CreateFlattenedDataTable(array: targetArray);
 
             // Convert fieldName to column name (replace . with _)
-            string columnName = fieldName.Contains(value: '.')
+            var columnName = fieldName.Contains(value: '.')
                 ? fieldName.Replace(oldChar: '.', newChar: '_')
                 : fieldName;
 
             // Process filter part
             string? sqlFilter = null;
             if (!string.IsNullOrWhiteSpace(value: filterPart))
-            {
                 sqlFilter = ConvertFilterExpression(filter: filterPart);
-                LogWritter(text: $"Converted filter: {sqlFilter}");
-            }
 
             // Process sort part
             string? sqlSort = null;
             if (!string.IsNullOrWhiteSpace(value: sortPart))
-            {
                 sqlSort = ConvertSortExpression(sort: sortPart);
-                LogWritter(text: $"Converted sort: {sqlSort}");
-            }
 
             // Verify column exists
             if (!dt.Columns.Contains(name: columnName))
@@ -617,9 +605,7 @@ internal partial class JsonQueryEngine
 
             // Handle indices
             if (!string.IsNullOrEmpty(value: indexCsv))
-            {
                 return ExtractItemsByIndices(indexCsv: indexCsv, projected: projected) ?? projected;
-            }
 
             return projected.Count switch
             {
@@ -635,18 +621,10 @@ internal partial class JsonQueryEngine
         }
     }
 
-    private string ConvertFilterExpression(string filter)
+    private static string ConvertFilterExpression(string filter)
     {
         // Handle quoted strings first
-        var result = Regex.Replace(
-            input: filter,
-            pattern: @"'([^']*)'",
-            evaluator: m =>
-            {
-                // Keep the quoted string as is
-                return m.Value;
-            }
-        );
+        var result = SingleQuotedContentMatcher().Replace(input: filter, evaluator: m => m.Value);
 
         // Convert operators
         result = result
@@ -658,54 +636,52 @@ internal partial class JsonQueryEngine
             .Replace(oldValue: "=<", newValue: "<=");
 
         // Convert property names (replace . with _)
-        result = Regex.Replace(
-            input: result,
-            pattern: @"\b([a-zA-Z_][\w\.]*)\b",
-            evaluator: m =>
-            {
-                var prop = m.Value;
-                return IsSqlKeyword(word: prop) ? prop : prop.Replace(oldChar: '.', newChar: '_');
-            }
-        );
+        result = AlphanumericDotPattern()
+            .Replace(
+                input: result,
+                evaluator: m =>
+                {
+                    var prop = m.Value;
+                    return IsSqlKeyword(word: prop)
+                        ? prop
+                        : prop.Replace(oldChar: '.', newChar: '_');
+                }
+            );
 
         // Handle IN clauses
-        result = Regex.Replace(
-            input: result,
-            pattern: @"\bIN\s*\(([^)]+)\)",
-            evaluator: m =>
-            {
-                var values = m.Groups[groupnum: 1]
-                    .Value.Split(separator: ',')
-                    .Select(selector: v => v.Trim())
-                    .Where(predicate: v => !string.IsNullOrEmpty(value: v));
-                return $"IN ({string.Join(separator: ", ", values: values)})";
-            }
-        );
+        result = InClausePattern()
+            .Replace(
+                input: result,
+                evaluator: m =>
+                {
+                    var values = m.Groups[groupnum: 1]
+                        .Value.Split(separator: ',')
+                        .Select(selector: v => v.Trim())
+                        .Where(predicate: v => !string.IsNullOrEmpty(value: v));
+                    return $"IN ({string.Join(separator: ", ", values: values)})";
+                }
+            );
 
         return result;
     }
 
     private static string ConvertSortExpression(string sort)
     {
-        var parts = sort.Split(
-            separator: new[] { ' ' },
-            options: StringSplitOptions.RemoveEmptyEntries
-        );
+        var parts = sort.Split(separator: [' '], options: StringSplitOptions.RemoveEmptyEntries);
         var sortFields = new List<string>();
         string? currentField = null;
 
         foreach (var part in parts)
-        {
             if (
                 part.Equals(value: "ASC", comparisonType: StringComparison.OrdinalIgnoreCase)
                 || part.Equals(value: "DESC", comparisonType: StringComparison.OrdinalIgnoreCase)
             )
             {
-                if (currentField != null)
-                {
-                    sortFields[^1] += $" {part.ToUpper()}";
-                    currentField = null;
-                }
+                if (currentField == null)
+                    continue;
+
+                sortFields[^1] += $" {part.ToUpper()}";
+                currentField = null;
             }
             else
             {
@@ -714,7 +690,6 @@ internal partial class JsonQueryEngine
                 sortFields.Add(item: field);
                 currentField = field;
             }
-        }
 
         return string.Join(separator: ", ", values: sortFields);
     }
@@ -770,11 +745,7 @@ internal partial class JsonQueryEngine
     private object? ProcessMathOrQuery(string queryStr)
     {
         // Handle aggregate functions first
-        var aggregateMatch = Regex.Match(
-            input: queryStr,
-            pattern: @"^(sum|avg|min|max|count)\s*\((.+)\)$",
-            options: RegexOptions.IgnoreCase
-        );
+        var aggregateMatch = AggregateFunctionPattern().Match(input: queryStr);
         if (aggregateMatch.Success)
         {
             var funcName = aggregateMatch.Groups[groupnum: 1].Value.ToLowerInvariant();
@@ -792,17 +763,16 @@ internal partial class JsonQueryEngine
                 )
                     return aggregateResult;
             }
-            else if (result != null)
-            {
-                if (
-                    AggregateFunction.TryApply(
-                        functionName: funcName,
-                        values: new[] { result },
-                        result: out var aggregateResult
-                    )
+            else if (
+                result != null
+                && AggregateFunction.TryApply(
+                    functionName: funcName,
+                    values: [result],
+                    result: out var aggregateResult
                 )
-                    return aggregateResult;
-            }
+            )
+                return aggregateResult;
+
             return 0;
         }
 
