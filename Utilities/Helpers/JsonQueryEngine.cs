@@ -89,8 +89,8 @@ internal partial class JsonQueryEngine : IDisposable
 
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
+        Dispose(disposing: true);
+        GC.SuppressFinalize(obj: this);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -101,7 +101,7 @@ internal partial class JsonQueryEngine : IDisposable
         if (disposing)
         {
             // Kembalikan buffer ke pool
-            _arrayPool.Return(_logBuffer);
+            _arrayPool.Return(array: _logBuffer);
             _logBuffer = null!;
 
             _sbLog.Clear();
@@ -115,51 +115,81 @@ internal partial class JsonQueryEngine
 {
     [GeneratedRegex(
         pattern: @"([\w#]+)\[\]\.([\w]+)(?:\[(\d+(?:\s*,\s*\d+)*)\])?",
-        options: RegexOptions.Compiled
+        options: RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        matchTimeoutMilliseconds: 100
     )]
     private static partial Regex ArrayFieldQueryPatternRegex();
 
     [GeneratedRegex(
         pattern: @"\bAVG\s*\(",
-        options: RegexOptions.IgnoreCase | RegexOptions.Compiled,
-        cultureName: "en-ID"
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        cultureName: "en-ID",
+        matchTimeoutMilliseconds: 100
     )]
     private static partial Regex AvgRegex();
 
     [GeneratedRegex(
         pattern: @"\bCOUNT\(([^()]+)\)",
-        options: RegexOptions.IgnoreCase | RegexOptions.Compiled,
-        cultureName: "en-ID"
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        cultureName: "en-ID",
+        matchTimeoutMilliseconds: 100
     )]
     private static partial Regex CountFunctionRegex();
 
-    // Untuk matching "COUNT(...)" sebagai keseluruhan string
     [GeneratedRegex(
         pattern: @"^COUNT\((.+?)\)$",
-        options: RegexOptions.IgnoreCase | RegexOptions.Compiled,
-        cultureName: "en-ID"
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        cultureName: "en-ID",
+        matchTimeoutMilliseconds: 100
     )]
     private static partial Regex FullCountExpressionRegex();
 
-    // [GeneratedRegex(@"([\w]+\[\]|#[\w_]+)")]
-    [GeneratedRegex(pattern: @"([\w#]+\[\]|#[\w_]+)", options: RegexOptions.Compiled)]
+    [GeneratedRegex(
+        pattern: @"([\w#]+\[\]|#[\w_]+)",
+        options: RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        matchTimeoutMilliseconds: 100
+    )]
     private static partial Regex SubQueryPatternRegex();
 
-    [GeneratedRegex("'([^']*)'", options: RegexOptions.Compiled)]
+    [GeneratedRegex(
+        pattern: "'([^']*)'",
+        options: RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        matchTimeoutMilliseconds: 100
+    )]
     private static partial Regex SingleQuotedContentMatcher();
 
-    [GeneratedRegex(@"\b([a-zA-Z_][\w\.]*)\b", options: RegexOptions.Compiled)]
+    [GeneratedRegex(
+        pattern: @"\b([a-zA-Z_][\w\.]*)\b",
+        options: RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        matchTimeoutMilliseconds: 100
+    )]
     private static partial Regex AlphanumericDotPattern();
 
-    [GeneratedRegex(@"\bIN\s*\(([^)]+)\)", options: RegexOptions.Compiled)]
+    [GeneratedRegex(
+        pattern: @"\bIN\s*\(([^)]+)\)",
+        options: RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        matchTimeoutMilliseconds: 100
+    )]
     private static partial Regex InClausePattern();
 
     [GeneratedRegex(
-        @"^(sum|avg|min|max|count)\s*\((.+)\)$",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled,
-        "en-ID"
+        pattern: @"^(sum|avg|min|max|count)\s*\((.+)\)$",
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        cultureName: "en-ID",
+        matchTimeoutMilliseconds: 100
     )]
     private static partial Regex AggregateFunctionPattern();
+
+    // Caching semua regex calls
+    private static readonly Regex ArrayFieldQueryPattern = ArrayFieldQueryPatternRegex();
+    private static readonly Regex AvgRegexInstance = AvgRegex();
+    private static readonly Regex CountFunctionRegexInstance = CountFunctionRegex();
+    private static readonly Regex FullCountExpressionRegexInstance = FullCountExpressionRegex();
+    private static readonly Regex SubQueryPatternRegexInstance = SubQueryPatternRegex();
+    private static readonly Regex SingleQuotedContentMatcherInstance = SingleQuotedContentMatcher();
+    private static readonly Regex AlphanumericDotPatternInstance = AlphanumericDotPattern();
+    private static readonly Regex InClausePatternInstance = InClausePattern();
+    private static readonly Regex AggregateFunctionPatternInstance = AggregateFunctionPattern();
 }
 
 internal partial class JsonQueryEngine
@@ -178,7 +208,7 @@ internal partial class JsonQueryEngine
         jsonContext.ThrowIfNull(paramName: nameof(jsonContext));
 
         _arrayPool = ArrayPool<char>.Shared;
-        _logBuffer = _arrayPool.Rent(4096);
+        _logBuffer = _arrayPool.Rent(minimumLength: 4096);
         _sourceData = jsonContext;
         RegisterCustomFunctions();
     }
@@ -201,7 +231,7 @@ internal partial class JsonQueryEngine
             );
 
         _arrayPool = ArrayPool<char>.Shared;
-        _logBuffer = _arrayPool.Rent(4096);
+        _logBuffer = _arrayPool.Rent(minimumLength: 4096);
         _sourceData = JObject.Parse(json: jsonContext);
         RegisterCustomFunctions();
     }
@@ -300,19 +330,18 @@ internal partial class JsonQueryEngine
     }
 
     private static string EvaluateCountCalls(string templateExpr) =>
-        CountFunctionRegex()
-            .Replace(
-                input: templateExpr,
-                evaluator: static string (m) =>
-                    m.Groups[groupnum: 1]
-                        .Value.Split(separator: ',')
-                        .Count(predicate: static bool (s) => !string.IsNullOrWhiteSpace(value: s))
-                        .ToString()
-            );
+        CountFunctionRegexInstance.Replace(
+            input: templateExpr,
+            evaluator: static string (m) =>
+                m.Groups[groupnum: 1]
+                    .Value.Split(separator: ',')
+                    .Count(predicate: static bool (s) => !string.IsNullOrWhiteSpace(value: s))
+                    .ToString()
+        );
 
     private static void ExtractSubQueries(string templateExpr, List<string> subQueries)
     {
-        foreach (Match m in SubQueryPatternRegex().Matches(input: templateExpr))
+        foreach (Match m in SubQueryPatternRegexInstance.Matches(input: templateExpr))
         {
             if (m.Value.StartsWith(value: '#'))
             {
@@ -461,19 +490,18 @@ internal partial class JsonQueryEngine
         foreach (var func in _customFuncRegistry)
         {
             var pattern = $@"\b{func.Key}\s*\(";
-            while (
-                Regex.IsMatch(
-                    input: templateExpr,
-                    pattern: pattern,
-                    options: RegexOptions.IgnoreCase
-                )
-            )
+            var regex = new Regex(
+                pattern: pattern,
+                options: RegexOptions.IgnoreCase,
+                matchTimeout: TimeSpan.FromMilliseconds(value: 100)
+            );
+
+            while (true)
             {
-                var match = Regex.Match(
-                    input: templateExpr,
-                    pattern: pattern,
-                    options: RegexOptions.IgnoreCase
-                );
+                var match = regex.Match(input: templateExpr);
+                if (!match.Success)
+                    break;
+
                 var startIdx = match.Index + match.Length;
                 var endIdx = FindClosingBracket(text: templateExpr, openPos: startIdx);
 
@@ -547,7 +575,7 @@ internal partial class JsonQueryEngine
         var filterPart = parts.Length > 1 ? parts[1] : null;
         var sortPart = parts.Length > 2 ? parts[2] : null;
 
-        var match = ArrayFieldQueryPatternRegex().Match(input: pathPart);
+        var match = ArrayFieldQueryPattern.Match(input: pathPart);
         if (!match.Success)
         {
             LogWriter(text: $"Invalid query format or path not recognized: '{queryStr}'.");
@@ -737,7 +765,10 @@ internal partial class JsonQueryEngine
     private static string ConvertFilterExpression(string filter)
     {
         // Handle quoted strings first
-        var result = SingleQuotedContentMatcher().Replace(input: filter, evaluator: m => m.Value);
+        var result = SingleQuotedContentMatcherInstance.Replace(
+            input: filter,
+            evaluator: m => m.Value
+        );
 
         // Convert operators
         result = result
@@ -749,31 +780,27 @@ internal partial class JsonQueryEngine
             .Replace(oldValue: "=<", newValue: "<=");
 
         // Convert property names (replace . with _)
-        result = AlphanumericDotPattern()
-            .Replace(
-                input: result,
-                evaluator: m =>
-                {
-                    var prop = m.Value;
-                    return IsSqlKeyword(word: prop)
-                        ? prop
-                        : prop.Replace(oldChar: '.', newChar: '_');
-                }
-            );
+        result = AlphanumericDotPatternInstance.Replace(
+            input: result,
+            evaluator: m =>
+            {
+                var prop = m.Value;
+                return IsSqlKeyword(word: prop) ? prop : prop.Replace(oldChar: '.', newChar: '_');
+            }
+        );
 
         // Handle IN clauses
-        result = InClausePattern()
-            .Replace(
-                input: result,
-                evaluator: m =>
-                {
-                    var values = m.Groups[groupnum: 1]
-                        .Value.Split(separator: ',')
-                        .Select(selector: v => v.Trim())
-                        .Where(predicate: v => !string.IsNullOrEmpty(value: v));
-                    return $"IN ({string.Join(separator: ", ", values: values)})";
-                }
-            );
+        result = InClausePatternInstance.Replace(
+            input: result,
+            evaluator: m =>
+            {
+                var values = m.Groups[groupnum: 1]
+                    .Value.Split(separator: ',')
+                    .Select(selector: v => v.Trim())
+                    .Where(predicate: v => !string.IsNullOrEmpty(value: v));
+                return $"IN ({string.Join(separator: ", ", values: values)})";
+            }
+        );
 
         return result;
     }
@@ -858,7 +885,7 @@ internal partial class JsonQueryEngine
     private object? ProcessMathOrQuery(string queryStr)
     {
         // Handle aggregate functions first
-        var aggregateMatch = AggregateFunctionPattern().Match(input: queryStr);
+        var aggregateMatch = AggregateFunctionPatternInstance.Match(input: queryStr);
         if (aggregateMatch.Success)
         {
             var funcName = aggregateMatch.Groups[groupnum: 1].Value.ToLowerInvariant();
@@ -891,7 +918,7 @@ internal partial class JsonQueryEngine
 
         // Normalisasi nama fungsi karna mathEval tidak memiliki fungsi
         // dengan nama AVG, yang ada adalah AVERAGE
-        var templateExpr = AvgRegex().Replace(input: queryStr, replacement: "AVERAGE(");
+        var templateExpr = AvgRegexInstance.Replace(input: queryStr, replacement: "AVERAGE(");
 
         // Eksekusi Custom Functions (VAL, PCT, dll)
         templateExpr = ApplyCustomFunctions(templateExpr: templateExpr);
@@ -935,7 +962,7 @@ internal partial class JsonQueryEngine
 
     private (bool flowControl, object? value) TryHandleRootCount(string templateExpr)
     {
-        var countMatch = FullCountExpressionRegex().Match(input: templateExpr);
+        var countMatch = FullCountExpressionRegexInstance.Match(input: templateExpr);
         if (
             !countMatch.Success
             || templateExpr.Contains(value: '+')
@@ -954,7 +981,7 @@ internal partial class JsonQueryEngine
     private void LogWriter(ReadOnlySpan<char> text)
     {
         // 1. Log ke console (jika diperlukan)
-        Console.WriteLine($"[JsonQueryEngine] {text}");
+        Console.WriteLine(value: $"[JsonQueryEngine] {text}");
 
         // 2. Simpan ke buffer untuk performa tinggi
         var logEntry = $"{text}{Environment.NewLine}";
@@ -969,12 +996,12 @@ internal partial class JsonQueryEngine
         // Jika setelah flush masih tidak cukup, gunakan StringBuilder
         if (_logPosition + logEntry.Length > _logBuffer.Length)
         {
-            _sbLog.Append(logEntry);
+            _sbLog.Append(value: logEntry);
             return;
         }
 
         // Copy ke buffer
-        logEntry.AsSpan().CopyTo(_logBuffer.AsSpan(_logPosition));
+        logEntry.AsSpan().CopyTo(destination: _logBuffer.AsSpan(start: _logPosition));
         _logPosition += logEntry.Length;
     }
 
@@ -982,7 +1009,7 @@ internal partial class JsonQueryEngine
     {
         if (_logPosition > 0)
         {
-            _sbLog.Append(_logBuffer, 0, _logPosition);
+            _sbLog.Append(value: _logBuffer, startIndex: 0, charCount: _logPosition);
             _logPosition = 0;
         }
     }
@@ -997,7 +1024,7 @@ internal partial class JsonQueryEngine
         {
             FlushLogBuffer();
 
-            if (string.IsNullOrEmpty(logData.Log))
+            if (string.IsNullOrEmpty(value: logData.Log))
             {
                 logData.Log =
                     _sbLog.Length > 0 ? _sbLog.ToString() : "Process completed successfully.";
