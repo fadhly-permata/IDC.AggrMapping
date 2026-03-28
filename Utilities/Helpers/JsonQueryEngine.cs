@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Data;
 using System.Globalization;
 using System.Text;
@@ -13,11 +14,11 @@ namespace IDC.AggrMapping.Utilities.Helpers;
 
 // TODO :
 // Berikut adalah daftar optimasi yang bisa dilakukan untuk meningkatkan performa JsonQueryEngine, terutama untuk penggunaan concurrent tinggi (hingga 1000 concurrent):
-// 1. **Memory Management Enhancement**
+// 1. [DONE] **Memory Management Enhancement**
 //    - Ganti `StringBuilder` dengan `ArrayPool<char>` untuk operasi string yang intensif
 //    - Gunakan `ArrayPool<JObject>` lebih agresif untuk temporary array
 //    - Implementasi `Dispose` pattern untuk memastikan resources dibersihkan dengan benar
-// 2. **Regex Optimization**
+// 2. [DONE] **Regex Optimization**
 //    - Cache compiled regex instances sebagai static readonly
 //    - Gunakan `RegexGenerator` attribute untuk regex yang kompleks
 //    - Hindari penggunaan regex di hot path jika memungkinkan
@@ -115,67 +116,63 @@ internal partial class JsonQueryEngine
 {
     [GeneratedRegex(
         pattern: @"([\w#]+)\[\]\.([\w]+)(?:\[(\d+(?:\s*,\s*\d+)*)\])?",
-        options: RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        options: RegexOptions.Compiled,
         matchTimeoutMilliseconds: 100
     )]
     private static partial Regex ArrayFieldQueryPatternRegex();
 
     [GeneratedRegex(
         pattern: @"\bAVG\s*\(",
-        options: RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.NonBacktracking,
-        cultureName: "en-ID",
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled,
         matchTimeoutMilliseconds: 100
     )]
     private static partial Regex AvgRegex();
 
     [GeneratedRegex(
         pattern: @"\bCOUNT\(([^()]+)\)",
-        options: RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.NonBacktracking,
-        cultureName: "en-ID",
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled,
         matchTimeoutMilliseconds: 100
     )]
     private static partial Regex CountFunctionRegex();
 
     [GeneratedRegex(
         pattern: @"^COUNT\((.+?)\)$",
-        options: RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.NonBacktracking,
-        cultureName: "en-ID",
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled,
         matchTimeoutMilliseconds: 100
     )]
     private static partial Regex FullCountExpressionRegex();
 
     [GeneratedRegex(
         pattern: @"([\w#]+\[\]|#[\w_]+)",
-        options: RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        options: RegexOptions.Compiled,
         matchTimeoutMilliseconds: 100
     )]
     private static partial Regex SubQueryPatternRegex();
 
     [GeneratedRegex(
         pattern: "'([^']*)'",
-        options: RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        options: RegexOptions.Compiled,
         matchTimeoutMilliseconds: 100
     )]
     private static partial Regex SingleQuotedContentMatcher();
 
     [GeneratedRegex(
         pattern: @"\b([a-zA-Z_][\w\.]*)\b",
-        options: RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        options: RegexOptions.Compiled,
         matchTimeoutMilliseconds: 100
     )]
     private static partial Regex AlphanumericDotPattern();
 
     [GeneratedRegex(
         pattern: @"\bIN\s*\(([^)]+)\)",
-        options: RegexOptions.Compiled | RegexOptions.NonBacktracking,
+        options: RegexOptions.Compiled,
         matchTimeoutMilliseconds: 100
     )]
     private static partial Regex InClausePattern();
 
     [GeneratedRegex(
         pattern: @"^(sum|avg|min|max|count)\s*\((.+)\)$",
-        options: RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.NonBacktracking,
-        cultureName: "en-ID",
+        options: RegexOptions.IgnoreCase | RegexOptions.Compiled,
         matchTimeoutMilliseconds: 100
     )]
     private static partial Regex AggregateFunctionPattern();
@@ -618,63 +615,112 @@ internal partial class JsonQueryEngine
 
     private static DataTable CreateFlattenedDataTable(JArray array)
     {
-        DataTable dt = new();
-        var columnNames = new HashSet<string>();
+        if (array.Count == 0)
+            return new DataTable();
 
-        // First pass: Collect all possible column names
-        foreach (var item in array.Children<JObject>())
-            ProcessItemForColumns(item: item, columnNames: columnNames, dt: dt);
+        // Buat DataTable baru di thread utama
+        DataTable dt = new DataTable();
+        var columnNames = new ConcurrentDictionary<string, byte>();
+        var rows = new ConcurrentBag<DataRow>();
 
-        // Second pass: Populate rows
-        foreach (var item in array.Children<JObject>())
+        // First pass: Collect all possible column names in parallel
+        MapJsonToColumns(array, columnNames);
+
+        // Add columns to the DataTable
+        foreach (var columnName in columnNames.Keys)
         {
-            var row = dt.NewRow();
-            ProcessItemForRows(item: item, row: row, dt: dt);
-            dt.Rows.Add(row: row);
+            dt.Columns.Add(columnName, typeof(object));
+        }
+
+        // Second pass: Populate rows in parallel
+        var columns = new HashSet<string>(columnNames.Keys, StringComparer.OrdinalIgnoreCase);
+
+        // Gunakan lock saat membuat DataRow baru
+        object tableLock = new object();
+
+        Parallel.ForEach(
+            array.Children<JObject>(),
+            item =>
+            {
+                DataRow row;
+                lock (tableLock)
+                {
+                    row = dt.NewRow();
+                }
+
+                var tempDict = new Dictionary<string, object>();
+
+                // Collect all values
+                foreach (var prop in item.Properties())
+                {
+                    ExtractPropertyValue(columns, tempDict, prop);
+                }
+
+                // Apply values to the row
+                foreach (var kvp in tempDict)
+                {
+                    row[kvp.Key] = kvp.Value;
+                }
+
+                rows.Add(row);
+            }
+        );
+
+        // Add rows to the DataTable
+        foreach (var row in rows)
+        {
+            dt.Rows.Add(row);
         }
 
         return dt;
 
-        static void ProcessItemForColumns(JObject item, HashSet<string> columnNames, DataTable dt)
+        static void MapJsonToColumns(JArray array, ConcurrentDictionary<string, byte> columnNames)
         {
-            foreach (var prop in item.Properties())
-                if (prop.Value is JObject nestedObj)
-                    foreach (var nestedProp in nestedObj.Properties())
-                        AddColumnIfNotExists(
-                            columnName: $"{prop.Name}_{nestedProp.Name}",
-                            columnNames: columnNames,
-                            dt: dt
-                        );
-                else
-                    AddColumnIfNotExists(columnName: prop.Name, columnNames: columnNames, dt: dt);
+            Parallel.ForEach(
+                array.Children<JObject>(),
+                item =>
+                {
+                    foreach (var prop in item.Properties())
+                    {
+                        if (prop.Value is JObject nestedObj)
+                        {
+                            foreach (var nestedProp in nestedObj.Properties())
+                            {
+                                var columnName = $"{prop.Name}_{nestedProp.Name}";
+                                columnNames.TryAdd(columnName, 0);
+                            }
+                        }
+                        else
+                        {
+                            columnNames.TryAdd(prop.Name, 0);
+                        }
+                    }
+                }
+            );
         }
 
-        static void AddColumnIfNotExists(
-            string columnName,
-            HashSet<string> columnNames,
-            DataTable dt
+        static void ExtractPropertyValue(
+            HashSet<string> columns,
+            Dictionary<string, object> tempDict,
+            JProperty prop
         )
         {
-            if (columnNames.Add(item: columnName))
-                dt.Columns.Add(columnName: columnName, type: typeof(object));
+            if (prop.Value is JObject nestedObj)
+            {
+                foreach (var nestedProp in nestedObj.Properties())
+                {
+                    var columnName = $"{prop.Name}_{nestedProp.Name}";
+                    if (columns.Contains(columnName))
+                        tempDict[columnName] = nestedProp.Value.ToObject<object>() ?? DBNull.Value;
+                }
+            }
+            else
+            {
+                var columnName = prop.Name;
+                if (columns.Contains(columnName))
+                    tempDict[columnName] = prop.Value.ToObject<object>() ?? DBNull.Value;
+            }
         }
-
-        static void ProcessItemForRows(JObject item, DataRow row, DataTable dt)
-        {
-            foreach (DataColumn col in dt.Columns)
-                row[column: col] = col.ColumnName.Contains(value: '_')
-                    ? GetNestedValue(item: item, columnName: col.ColumnName)
-                    : GetSimpleValue(item: item, columnName: col.ColumnName);
-        }
-
-        static object GetNestedValue(JObject item, string columnName)
-        {
-            var parts = columnName.Split(separator: '_', count: 2);
-            return (item[parts[0]]?[parts[1]])?.ToObject<object>() ?? DBNull.Value;
-        }
-
-        static object GetSimpleValue(JObject item, string columnName) =>
-            item[propertyName: columnName]?.ToObject<object>() ?? DBNull.Value;
     }
 
     private static object? ExtractItemsByIndices(string indexCsv, List<object?> projected)
