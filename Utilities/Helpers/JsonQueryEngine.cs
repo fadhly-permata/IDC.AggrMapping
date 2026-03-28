@@ -632,17 +632,13 @@ internal partial class JsonQueryEngine
             foreach (var prop in item.Properties())
             {
                 if (prop.Value is JObject nestedObj)
-                {
                     foreach (var nestedProp in nestedObj.Properties())
                     {
                         var columnName = $"{prop.Name}_{nestedProp.Name}";
                         columnSet.Add(item: columnName);
                     }
-                }
                 else
-                {
                     columnSet.Add(item: prop.Name);
-                }
             }
         }
 
@@ -751,9 +747,7 @@ internal partial class JsonQueryEngine
 
             // Handle indices
             if (!string.IsNullOrEmpty(value: indexCsv))
-            {
                 return ExtractItemsByIndices(indexCsv: indexCsv, projected: projected) ?? projected;
-            }
 
             return projected.Count switch
             {
@@ -779,35 +773,28 @@ internal partial class JsonQueryEngine
 
         // Apply filter if exists
         if (!string.IsNullOrWhiteSpace(value: filterPart))
-        {
             // Implement simple filtering logic
             // Note: You might need to implement a more robust filter parser
             rows = rows.Where(predicate: row =>
                 EvaluateFilter(row: row, filter: filterPart, columns: table.Columns)
             );
-        }
 
         // Apply sort if exists
-        if (!string.IsNullOrWhiteSpace(value: sortPart))
-        {
-            // Implement simple sorting logic
-            var parts = sortPart.Split(
-                separator: ' ',
-                options: StringSplitOptions.RemoveEmptyEntries
-            );
-            if (parts.Length >= 1)
-            {
-                var sortColumn = parts[0];
-                var ascending =
-                    parts.Length < 2
-                    || !parts[1]
-                        .Equals(value: "DESC", comparisonType: StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(value: sortPart))
+            return rows.ToList();
 
-                rows = ascending
-                    ? rows.OrderBy(keySelector: row => row[column: sortColumn])
-                    : rows.OrderByDescending(keySelector: row => row[column: sortColumn]);
-            }
-        }
+        // Implement simple sorting logic
+        var parts = sortPart.Split(separator: ' ', options: StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 1)
+            return rows.ToList();
+        var sortColumn = parts[0];
+        var ascending =
+            parts.Length < 2
+            || !parts[1].Equals(value: "DESC", comparisonType: StringComparison.OrdinalIgnoreCase);
+
+        rows = ascending
+            ? rows.OrderBy(keySelector: row => row[column: sortColumn])
+            : rows.OrderByDescending(keySelector: row => row[column: sortColumn]);
 
         return rows.ToList();
     }
@@ -959,11 +946,11 @@ internal partial class JsonQueryEngine
 
     private void FlushLogBuffer()
     {
-        if (_logPosition > 0)
-        {
-            _sbLog.Append(value: _logBuffer, startIndex: 0, charCount: _logPosition);
-            _logPosition = 0;
-        }
+        if (_logPosition <= 0)
+            return;
+
+        _sbLog.Append(value: _logBuffer, startIndex: 0, charCount: _logPosition);
+        _logPosition = 0;
     }
 
     internal async Task SaveLog(
