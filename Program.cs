@@ -67,11 +67,11 @@ internal static partial class Program
         this WebApplicationBuilder builder
     )
     {
-        using var serviceProvider = builder.Services.BuildServiceProvider();
+        await using var serviceProvider = builder.Services.BuildServiceProvider();
         var caching = serviceProvider.GetRequiredService<Caching>();
         var pgHelper = serviceProvider.GetRequiredService<PostgreHelper>();
 
-        var gcm = await new GlobalConfigurationModel().InitFromDatabase(
+        var gcm = await new GlobalConfigurationModel().GetGlobalConfigurationsAsync(
             pgHelper: pgHelper,
             caching: caching
         );

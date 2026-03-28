@@ -55,7 +55,7 @@ public partial class GlobalConfigurationModel
     public override string ToString() =>
         $"MaxParallelProcess: {MaxParallelProcess}, MaxDepth: {MaxDepth}, MaxMapCount: {MaxMapCount}, MaxDataPayload: {MaxDataPayload}";
 
-    internal async Task<GlobalConfigurationModel> InitFromDatabase(
+    internal async Task<GlobalConfigurationModel> GetGlobalConfigurationsAsync(
         PostgreHelper pgHelper,
         Caching caching,
         CancellationToken cancellationToken = default
@@ -64,7 +64,7 @@ public partial class GlobalConfigurationModel
             key: "GlobalConfigurations",
             valueFactory: async () =>
             {
-                var cData = await GetGlobalConfigurationsAsync(
+                var cData = await InitFromDatabaseAsync(
                     pgHelper: pgHelper,
                     configCodes: ["GAM01", "GAM02", "GAM03", "GAM04", "GAM05"],
                     cancellationToken: cancellationToken
@@ -84,7 +84,7 @@ public partial class GlobalConfigurationModel
             expirationRenewal: true
         );
 
-    internal static async Task<JObject?> GetGlobalConfigurationsAsync(
+    internal static async Task<JObject?> InitFromDatabaseAsync(
         PostgreHelper pgHelper,
         string[] configCodes,
         CancellationToken cancellationToken = default
