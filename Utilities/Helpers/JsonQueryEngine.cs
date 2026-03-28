@@ -74,7 +74,7 @@ namespace IDC.AggrMapping.Utilities.Helpers;
 //     - Lakukan memory profiling secara berkala
 //     - Implementasi stress testing untuk skenario concurrent
 
-internal partial class JsonQueryEngine
+internal partial class JsonQueryEngine : IDisposable
 {
     private readonly Dictionary<string, Func<string, string>> _customFuncRegistry = new(
         comparer: StringComparer.OrdinalIgnoreCase
@@ -82,8 +82,33 @@ internal partial class JsonQueryEngine
     private readonly Dictionary<string, object?> _processedResults = [];
     private readonly JObject _sourceData;
     private readonly StringBuilder _sbLog = new();
-    private readonly char[] _logBuffer = ArrayPool<char>.Shared.Rent(4096);
+    private readonly ArrayPool<char> _arrayPool;
+    private char[] _logBuffer;
     private int _logPosition;
+    private bool _disposed;
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            // Kembalikan buffer ke pool
+            _arrayPool.Return(_logBuffer);
+            _logBuffer = null!;
+
+            _sbLog.Clear();
+        }
+
+        _disposed = true;
+    }
 }
 
 internal partial class JsonQueryEngine
@@ -151,6 +176,9 @@ internal partial class JsonQueryEngine
     internal JsonQueryEngine(JObject jsonContext)
     {
         jsonContext.ThrowIfNull(paramName: nameof(jsonContext));
+
+        _arrayPool = ArrayPool<char>.Shared;
+        _logBuffer = _arrayPool.Rent(4096);
         _sourceData = jsonContext;
         RegisterCustomFunctions();
     }
@@ -172,6 +200,8 @@ internal partial class JsonQueryEngine
                 paramName: nameof(jsonContext)
             );
 
+        _arrayPool = ArrayPool<char>.Shared;
+        _logBuffer = _arrayPool.Rent(4096);
         _sourceData = JObject.Parse(json: jsonContext);
         RegisterCustomFunctions();
     }
@@ -249,7 +279,7 @@ internal partial class JsonQueryEngine
             }
             catch (Exception ex)
             {
-                LogWritter(text: $"Error processing key '{queryKey}': {ex.Message}");
+                LogWriter(text: $"Error processing key '{queryKey}': {ex.Message}");
                 finalResult.Add(propertyName: queryKey, value: JValue.CreateNull());
             }
         }
@@ -508,7 +538,7 @@ internal partial class JsonQueryEngine
             if (_processedResults.TryGetValue(key: key, value: out var val))
                 return val;
 
-            LogWritter(text: $"Lookup field '#{key}' not found in processed results.");
+            LogWriter(text: $"Lookup field '#{key}' not found in processed results.");
             return null;
         }
 
@@ -520,7 +550,7 @@ internal partial class JsonQueryEngine
         var match = ArrayFieldQueryPatternRegex().Match(input: pathPart);
         if (!match.Success)
         {
-            LogWritter(text: $"Invalid query format or path not recognized: '{queryStr}'.");
+            LogWriter(text: $"Invalid query format or path not recognized: '{queryStr}'.");
             return null;
         }
 
@@ -551,7 +581,7 @@ internal partial class JsonQueryEngine
                     indexCsv: indexCsv
                 );
             default:
-                LogWritter(
+                LogWriter(
                     text: $"Array or object '{arrayName}' not found in source JSON for query: '{queryStr}'."
                 );
                 return null;
@@ -670,7 +700,7 @@ internal partial class JsonQueryEngine
             // Verify column exists
             if (!dt.Columns.Contains(name: columnName))
             {
-                LogWritter(
+                LogWriter(
                     text: $"Column '{columnName}' not found. Available columns: {string.Join(separator: ", ", values: dt.Columns.Cast<DataColumn>().Select(selector: c => c.ColumnName))}"
                 );
                 return null;
@@ -699,7 +729,7 @@ internal partial class JsonQueryEngine
         }
         catch (Exception ex)
         {
-            LogWritter(text: $"Error in Projected: {ex.Message}");
+            LogWriter(text: $"Error in Projected: {ex.Message}");
             return null;
         }
     }
@@ -921,7 +951,7 @@ internal partial class JsonQueryEngine
         return (flowControl: false, value: val != null ? 1.0 : 0.0);
     }
 
-    private void LogWritter(ReadOnlySpan<char> text)
+    private void LogWriter(ReadOnlySpan<char> text)
     {
         // 1. Log ke console (jika diperlukan)
         Console.WriteLine($"[JsonQueryEngine] {text}");
@@ -929,21 +959,23 @@ internal partial class JsonQueryEngine
         // 2. Simpan ke buffer untuk performa tinggi
         var logEntry = $"{text}{Environment.NewLine}";
 
-        if (logEntry.TryCopyTo(_logBuffer.AsSpan(_logPosition)))
+        // Cek apakah cukup ruang di buffer
+        if (_logPosition + logEntry.Length > _logBuffer.Length)
         {
-            _logPosition += logEntry.Length;
+            // Buffer penuh, flush dulu
+            FlushLogBuffer();
+        }
 
-            // Jika buffer hampir penuh, flush ke StringBuilder
-            if (_logBuffer.Length - _logPosition < 256)
-            {
-                FlushLogBuffer();
-            }
-        }
-        else
+        // Jika setelah flush masih tidak cukup, gunakan StringBuilder
+        if (_logPosition + logEntry.Length > _logBuffer.Length)
         {
-            // Jika tidak cukup ruang, langsung tulis ke StringBuilder
             _sbLog.Append(logEntry);
+            return;
         }
+
+        // Copy ke buffer
+        logEntry.AsSpan().CopyTo(_logBuffer.AsSpan(_logPosition));
+        _logPosition += logEntry.Length;
     }
 
     private void FlushLogBuffer()
@@ -963,7 +995,6 @@ internal partial class JsonQueryEngine
     {
         try
         {
-            // Pastikan semua log di buffer sudah di-flush
             FlushLogBuffer();
 
             if (string.IsNullOrEmpty(logData.Log))
