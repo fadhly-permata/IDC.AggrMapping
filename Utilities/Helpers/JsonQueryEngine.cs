@@ -11,6 +11,69 @@ using org.matheval;
 
 namespace IDC.AggrMapping.Utilities.Helpers;
 
+// TODO :
+// Berikut adalah daftar optimasi yang bisa dilakukan untuk meningkatkan performa JsonQueryEngine, terutama untuk penggunaan concurrent tinggi (hingga 1000 concurrent):
+// 1. **Memory Management Enhancement**
+//    - Ganti `StringBuilder` dengan `ArrayPool<char>` untuk operasi string yang intensif
+//    - Gunakan `ArrayPool<JObject>` lebih agresif untuk temporary array
+//    - Implementasi `Dispose` pattern untuk memastikan resources dibersihkan dengan benar
+// 2. **Regex Optimization**
+//    - Cache compiled regex instances sebagai static readonly
+//    - Gunakan `RegexGenerator` attribute untuk regex yang kompleks
+//    - Hindari penggunaan regex di hot path jika memungkinkan
+// 3. **Parallel Processing**
+//    - Implementasi parallel processing untuk operasi yang bisa diparalelkan (e.g., CreateFlattenedDataTable)
+//    - Gunakan `Parallel.ForEach` untuk operasi pada array besar
+//    - Implementasi lock-free patterns untuk shared resources
+// 4. **Data Structure Optimization**
+//    - Ganti `DataTable` dengan custom collection untuk menghindari overhead
+//    - Gunakan `Dictionary<string, object>` sebagai alternatif yang lebih ringan
+//    - Implementasi pooling untuk objek yang sering dibuat/dihancurkan
+// 5. **String Manipulation**
+//    - Kurangi alokasi string dengan `string.Create` dan `Span<T>`
+//    - Gunakan `StringComparison.Ordinal` untuk operasi string comparison
+//    - Implementasi string interning untuk string yang sering digunakan
+// 6. **JObject/JToken Handling**
+//    - Gunakan `JToken.SelectToken` dengan path yang di-cache
+//    - Hindari deep copy JObject/JToken jika memungkinkan
+//    - Gunakan streaming JSON untuk file besar
+// 7. **Concurrency Optimization**
+//    - Implementasi `ConcurrentDictionary` untuk _customFuncRegistry
+//    - Gunakan `ThreadLocal<T>` untuk state yang thread-specific
+//    - Hindari lock contention dengan teknik lock striping
+// 8. **Logging Optimization**
+//    - Implementasi async logging dengan channel atau buffer
+//    - Gunakan structured logging untuk mengurangi parsing overhead
+//    - Batasi jumlah log di production
+// 9. **Query Processing**
+//    - Cache hasil evaluasi query yang sering digunakan
+//    - Pre-compile expression trees untuk filter yang kompleks
+//    - Optimasi algoritma binding sub-queries
+// 10. **Memory Pressure Reduction**
+//     - Gunakan ValueTask untuk operasi async yang sering completed sync
+//     - Implementasi object pooling untuk objek yang berat
+//     - Kurangi boxing/unboxing operations
+// 11. **Error Handling**
+//     - Hindari exception throwing di hot path
+//     - Gunakan TryXXX pattern untuk operasi yang mungkin gagal
+//     - Batasi stack trace capturing untuk error yang sering terjadi
+// 12. **Garbage Collection Optimization**
+//     - Gunakan struct untuk data kecil yang sering dialokasikan
+//     - Implementasi IDisposable untuk mengontrol GC pressure
+//     - Hindari finalizers jika memungkinkan
+// 13. **Configuration**
+//     - Tambahkan konfigurasi untuk menonaktifkan fitur yang tidak diperlukan
+//     - Implementasi adaptive performance tuning
+//     - Tambahkan metrics untuk monitoring performa
+// 14. **Dependency Optimization**
+//     - Evaluasi penggunaan org.matheval untuk kemungkinan replacement
+//     - Minimalkan dependency eksternal
+//     - Gunakan source generators untuk mengurangi reflection
+// 15. **Testing & Profiling**
+//     - Tambahkan benchmark untuk operasi kritis
+//     - Lakukan memory profiling secara berkala
+//     - Implementasi stress testing untuk skenario concurrent
+
 internal partial class JsonQueryEngine
 {
     private readonly Dictionary<string, Func<string, string>> _customFuncRegistry = new(
