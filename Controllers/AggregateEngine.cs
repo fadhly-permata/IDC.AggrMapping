@@ -75,7 +75,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     /// </returns>
     [Tags(tags: "Aggregation"), HttpPost(template: "SingleAggregate")]
     public async Task<APIResponseData<object?>> SingleAggregate(
-        [FromBody] InsertAndAggregatePayloadModel payload,
+        [FromBody] UpsertAndAggregatePayloadModel payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -87,7 +87,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
         {
             await payload
                 .ChangeOperationType(
-                    operationType: InsertAndAggregatePayloadModel.OperationTypes.Aggregation
+                    operationType: UpsertAndAggregatePayloadModel.OperationTypes.Aggregation
                 )
                 .Validate();
 
@@ -175,7 +175,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     /// </remarks>
     [Tags(tags: "Aggregation"), HttpPost(template: "MultipleAggregate")]
     public async Task<APIResponseData<object?>> MultipleAggregate(
-        [FromBody] InsertAndAggregatePayloadModel payload,
+        [FromBody] UpsertAndAggregatePayloadModel payload,
         CancellationToken cancellationToken = default
     )
     {
@@ -183,7 +183,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
         {
             await payload
                 .ChangeOperationType(
-                    operationType: InsertAndAggregatePayloadModel.OperationTypes.Aggregation
+                    operationType: UpsertAndAggregatePayloadModel.OperationTypes.Aggregation
                 )
                 .Validate();
 

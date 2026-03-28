@@ -11,7 +11,7 @@ namespace IDC.AggrMapping.Utilities.Models;
 /// <summary>
 ///     Represents a model for AggrPayload.
 /// </summary>
-public partial class InsertAndAggregatePayloadModel : BaseModel<InsertAndAggregatePayloadModel>
+public partial class UpsertAndAggregatePayloadModel : BaseModel<UpsertAndAggregatePayloadModel>
 {
     /// <summary>
     ///     Gets or sets the batch id.
@@ -60,7 +60,7 @@ public partial class InsertAndAggregatePayloadModel : BaseModel<InsertAndAggrega
     public object Data { get; set; } = new();
 }
 
-public partial class InsertAndAggregatePayloadModel
+public partial class UpsertAndAggregatePayloadModel
 {
     internal enum OperationTypes
     {
@@ -77,7 +77,7 @@ public partial class InsertAndAggregatePayloadModel
 
     internal OperationTypes OperationType { get; private set; } = OperationTypes.Aggregation;
 
-    internal InsertAndAggregatePayloadModel ChangeOperationType(OperationTypes operationType)
+    internal UpsertAndAggregatePayloadModel ChangeOperationType(OperationTypes operationType)
     {
         ArgumentNullException.ThrowIfNull(argument: operationType);
 
@@ -89,7 +89,19 @@ public partial class InsertAndAggregatePayloadModel
     {
         await Task.CompletedTask;
 
-        Code.ThrowIfNullOrWhitespace(paramName: nameof(Code));
+        if (OperationType == OperationTypes.InsertData)
+        {
+            if (Code.Split(',').Length is < 1 or > 5)
+                throw new DataException(s: "The number of Map Codes must be between 1 and 5.");
+        }
+        else
+        {
+            Code.ThrowIfNullOrWhitespace(
+                paramName: nameof(Code),
+                message: "Aggregation Code can not be null or empty."
+            );
+        }
+
         Data.ThrowIfNull(paramName: nameof(Data));
         BatchId.ThrowIfNullOrWhitespace(paramName: nameof(BatchId));
 
