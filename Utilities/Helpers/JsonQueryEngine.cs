@@ -257,6 +257,16 @@ internal partial class JsonQueryEngine
             return Convert.ToString(value: scalar ?? 0, provider: CultureInfo.InvariantCulture)!;
         };
 
+        _customFuncRegistry[key: "tax"] = string (inner) =>
+        {
+            var evaluated = EvaluateQuery(queryStr: inner);
+            var scalar = evaluated is System.Collections.IList { Count: > 0 } list
+                ? list[index: 0]
+                : evaluated;
+
+            return Convert.ToString(value: scalar ?? 0, provider: CultureInfo.InvariantCulture)!;
+        };
+
         // Handler untuk PCT(awal, akhir) -> Konversi ke formula (A-B)/A * 100
         _customFuncRegistry[key: "pct"] = string (args) =>
         {
@@ -769,34 +779,85 @@ internal partial class JsonQueryEngine
         string? sortPart
     )
     {
-        var rows = table.Rows.AsEnumerable();
+        IEnumerable<LightweightRow> rows = table.Rows;
 
-        // Apply filter if exists
-        if (!string.IsNullOrWhiteSpace(value: filterPart))
-            // Implement simple filtering logic
-            // Note: You might need to implement a more robust filter parser
-            rows = rows.Where(predicate: row =>
-                EvaluateFilter(row: row, filter: filterPart, columns: table.Columns)
-            );
+        // Apply filter
+        if (string.IsNullOrWhiteSpace(value: filterPart))
+            return ProcessSorting(rows: rows, sortPart: sortPart);
 
-        // Apply sort if exists
+        return ProcessSorting(
+            rows:
+            [
+                .. rows.Where(predicate: row =>
+                    // Materialize to avoid multiple enumeration
+                    EvaluateFilter(row: row, filter: filterPart, columns: table.Columns)
+                ),
+            ],
+            sortPart: sortPart
+        );
+    }
+
+    private static List<LightweightRow> ProcessSorting(
+        IEnumerable<LightweightRow> rows,
+        string? sortPart
+    )
+    {
         if (string.IsNullOrWhiteSpace(value: sortPart))
-            return rows.ToList();
+            return [.. rows];
 
-        // Implement simple sorting logic
-        var parts = sortPart.Split(separator: ' ', options: StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 1)
-            return rows.ToList();
-        var sortColumn = parts[0];
-        var ascending =
-            parts.Length < 2
-            || !parts[1].Equals(value: "DESC", comparisonType: StringComparison.OrdinalIgnoreCase);
+        var orderSpecs = ParseOrderByClause(sortClause: sortPart);
+        if (orderSpecs.Count == 0)
+            return [.. rows];
 
-        rows = ascending
-            ? rows.OrderBy(keySelector: row => row[column: sortColumn])
-            : rows.OrderByDescending(keySelector: row => row[column: sortColumn]);
+        // Materialize the rows to avoid multiple enumeration
+        var rowsList = rows as List<LightweightRow> ?? [.. rows];
+        if (rowsList.Count == 0)
+            return rowsList;
 
-        return rows.ToList();
+        IOrderedEnumerable<LightweightRow>? orderedRows = null;
+
+        foreach (var (column, ascending) in orderSpecs)
+            if (orderedRows is null)
+                orderedRows = ascending
+                    ? rowsList.OrderBy(keySelector: row => row[column: column])
+                    : rowsList.OrderByDescending(keySelector: row => row[column: column]);
+            else
+                orderedRows = ascending
+                    ? orderedRows.ThenBy(keySelector: row => row[column: column])
+                    : orderedRows.ThenByDescending(keySelector: row => row[column: column]);
+
+        return orderedRows?.ToList() ?? rowsList;
+    }
+
+    private static List<(string column, bool ascending)> ParseOrderByClause(string sortClause)
+    {
+        var orderSpecs = new List<(string, bool)>();
+        var clauses = sortClause.Split(separator: ',');
+
+        foreach (var clause in clauses)
+        {
+            var parts = clause
+                .Trim()
+                .Split(separator: ' ', options: StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+                continue;
+
+            var column = parts[0];
+            var ascending = true;
+
+            if (
+                parts.Length > 1
+                && parts[1]
+                    .Equals(value: "DESC", comparisonType: StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                ascending = false;
+            }
+
+            orderSpecs.Add(item: (column, ascending));
+        }
+
+        return orderSpecs;
     }
 
     private static bool EvaluateFilter(LightweightRow row, string filter, List<string> columns)
