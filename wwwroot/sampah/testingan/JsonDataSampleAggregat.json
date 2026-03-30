@@ -1,0 +1,85 @@
+{
+  "employees": [
+    {
+      "id": 1,
+      "name": "John Doe",
+      "department": "IT",
+      "salary": 10000000,
+      "bonus": 2000000,
+      "isActive": true,
+      "joinDate": "2020-01-15",
+      "address": {
+        "alamat_detail": "Jl. Sudirman No. 123",
+        "kelurahan": "Karet Semanggi",
+        "kecamatan": "Setiabudi",
+        "kota": "Jakarta Selatan",
+        "negara": "Indonesia"
+      }
+    },
+    {
+      "id": 2,
+      "name": "Jane Smith",
+      "department": "HR",
+      "salary": 9000000,
+      "bonus": 1500000,
+      "isActive": true,
+      "joinDate": "2019-05-20",
+      "address": {
+        "alamat_detail": "Maple Avenue 45",
+        "kelurahan": "Greenwich",
+        "kecamatan": "Central London",
+        "kota": "London",
+        "negara": "United Kingdom"
+      }
+    },
+    {
+      "id": 3,
+      "name": "Bob Johnson",
+      "department": "IT",
+      "salary": 8000000,
+      "bonus": 1000000,
+      "isActive": false,
+      "joinDate": "2021-03-10",
+      "address": {
+        "alamat_detail": "Sunset Boulevard 707",
+        "kelurahan": "Hollywood",
+        "kecamatan": "Los Angeles County",
+        "kota": "Los Angeles",
+        "negara": "USA"
+      }
+    },
+    {
+      "id": 4,
+      "name": "Alice Williams",
+      "department": "Finance",
+      "salary": 12000000,
+      "bonus": 3000000,
+      "isActive": true,
+      "joinDate": "2018-11-05",
+      "address": {
+        "alamat_detail": "Jl. Asia Afrika No. 10",
+        "kelurahan": "Braga",
+        "kecamatan": "Sumur Bandung",
+        "kota": "Bandung",
+        "negara": "Indonesia"
+      }
+    }
+  ],
+  "departments": [
+    {
+      "id": 1,
+      "name": "IT",
+      "budget": 50000000
+    },
+    {
+      "id": 2,
+      "name": "HR",
+      "budget": 30000000
+    },
+    {
+      "id": 3,
+      "name": "Finance",
+      "budget": 70000000
+    }
+  ]
+}
