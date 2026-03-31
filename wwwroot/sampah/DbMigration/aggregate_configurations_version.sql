@@ -115,10 +115,8 @@ WHERE (gcv_is_deleted = false);
 -- Functions
 -- =============================================
 
-CREATE OR REPLACE FUNCTION aggregation.acv_get_aggregation_grid(
-    p_mode varchar(20) DEFAULT 'ALL' -- 'LAST_VERSION', 'LAST_ACTIVE', 'ALL'
-)
-RETURNS jsonb AS $$
+CREATE OR REPLACE FUNCTION "aggregation"."acv_get_aggregation_grid"("p_mode" varchar='ALL'::character varying)
+  RETURNS "pg_catalog"."jsonb" AS $BODY$
 DECLARE
     v_result jsonb;
 BEGIN
@@ -173,22 +171,22 @@ BEGIN
     LEFT JOIN last_reject_info rj ON main.gcv_id = rj.gcv_id
     WHERE main.gcv_is_deleted = false -- Filter di level main query
     AND (
-        (p_mode = 'LAST_VERSION' AND main.is_last_version = true) OR
-        (p_mode = 'LAST_ACTIVE' AND main.is_last_active = true) OR
-        (p_mode = 'ALL')
+        (UPPER(p_mode) = 'LAST_VERSION' AND main.is_last_version = true) OR
+        (UPPER(p_mode) = 'LAST_ACTIVE' AND main.is_last_active = true) OR
+        (UPPER(p_mode) = 'ALL')
     );
 
     RETURN COALESCE(v_result, '[]'::jsonb);
 END;
-$$ LANGUAGE plpgsql;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
 
 
 ------
 
-CREATE OR REPLACE FUNCTION aggregation.acv_get_aggregation_detail(
-    p_id bigint
-)
-RETURNS jsonb AS $$
+CREATE OR REPLACE FUNCTION "aggregation"."acv_get_aggregation_detail"("p_id" int8)
+  RETURNS "pg_catalog"."jsonb" AS $BODY$
 DECLARE
     v_result jsonb;
 BEGIN
@@ -217,28 +215,31 @@ BEGIN
     )
     SELECT 
         jsonb_build_object(
-            'gcv_id', m.gcv_id,
-            'gcv_code', m.gcv_code,
-            'gcv_version', m.gcv_version,
-            'gcv_status', m.gcv_status,
+            'id', m.gcv_id,
+            'code', m.gcv_code,
+            'version', m.gcv_version,
+            'status', m.gcv_status,
             'is_last_active', m.is_last_active,
             'is_last_version', m.is_last_version,
-            'gcv_name', m.gcv_name,
-            'gcv_desc', m.gcv_desc,
-            'gcv_data_applied', m.gcv_data_applied,
-            'gcv_type', m.gcv_type,
-            'gcv_json_list', m.gcv_json_list,
-            'gcv_json_condition', m.gcv_json_condition,
-            'gcv_config_final', m.gcv_config_final,
-            'gcv_is_deleted', m.gcv_is_deleted,
-            'gcv_created_by', m.gcv_created_by,
-            'gcv_created_date', m.gcv_created_date,
-            'gcv_updated_by', m.gcv_updated_by,
-            'gcv_updated_date', m.gcv_updated_date,
-            'gcv_reject_by', rl.r_by,
-            'gcv_reject_note', rl.r_note,
-            'gcv_reject_date', rl.r_date,
-            'gcv_reject_position', rl.r_pos
+            'name', m.gcv_name,
+            'desc', m.gcv_desc,
+            'data_applied', m.gcv_data_applied,
+            'type', m.gcv_type,
+						
+						--Add Cleaned Version --
+						'json_list', m.gcv_json_list::jsonb,
+            'json_condition', m.gcv_json_condition::jsonb,
+            'final_config', m.gcv_config_final::jsonb,
+						--------------
+            'is_deleted', m.gcv_is_deleted,
+            'created_by', m.gcv_created_by,
+            'created_date', m.gcv_created_date,
+            'updated_by', m.gcv_updated_by,
+            'updated_date', m.gcv_updated_date,
+            'reject_by', rl.r_by,
+            'reject_note', rl.r_note,
+            'reject_date', rl.r_date,
+            'reject_position', rl.r_pos
         ) INTO v_result
     FROM aggregation.aggregate_configurations_version m
     LEFT JOIN reject_logic rl ON m.gcv_id = rl.gcv_id
@@ -247,16 +248,15 @@ BEGIN
     -- Kembalikan object kosong jika ID tidak ketemu (biar di C# gak error)
     RETURN COALESCE(v_result, '{}'::jsonb);
 END;
-$$ LANGUAGE plpgsql;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
 
 
 --------------------
 
-CREATE OR REPLACE FUNCTION aggregation.acv_remove_aggregation_data(
-    p_id bigint,
-    p_user varchar
-)
-RETURNS jsonb AS $$
+CREATE OR REPLACE FUNCTION "aggregation"."acv_remove_aggregation_data"("p_id" int8, "p_username" varchar)
+  RETURNS "pg_catalog"."jsonb" AS $BODY$
 DECLARE
     v_updated_row_count int;
     v_new_log jsonb;
@@ -265,7 +265,7 @@ BEGIN
     v_new_log := jsonb_build_object(
         'status', 'DELETE',
         'user_type', NULL,
-        'user', p_user,
+        'user', p_username,
         'note', NULL,
         'date', TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')
     );
@@ -274,7 +274,7 @@ BEGIN
     UPDATE aggregation.aggregate_configurations_version
     SET 
         gcv_is_deleted = true,
-        gcv_updated_by = p_user,
+        gcv_updated_by = p_username,
         gcv_updated_date = CURRENT_TIMESTAMP,
         -- Operator || digunakan untuk append object ke dalam array jsonb
         gcv_activity_log = COALESCE(gcv_activity_log, '[]'::jsonb) || v_new_log,
@@ -307,7 +307,9 @@ EXCEPTION WHEN OTHERS THEN
         'message', SQLERRM
     );
 END;
-$$ LANGUAGE plpgsql;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
 
 
 ----------------------
@@ -694,10 +696,8 @@ $$ LANGUAGE plpgsql;
 
 --------------------------
 
-CREATE OR REPLACE FUNCTION aggregation.acv_log_aggregation(
-    p_code varchar
-)
-RETURNS jsonb AS $$
+CREATE OR REPLACE FUNCTION "aggregation"."acv_log_aggregation"("p_code" varchar)
+  RETURNS "pg_catalog"."jsonb" AS $BODY$
 DECLARE
     v_result jsonb;
 BEGIN
@@ -707,6 +707,7 @@ BEGIN
         jsonb_build_object(
             'name', main.gcv_name,
             'desc', main.gcv_desc,
+						'version', main.gcv_version,
             'logs', (
                 SELECT jsonb_agg(
                     jsonb_build_object(
@@ -746,7 +747,9 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
     RETURN jsonb_build_object('status', 'EXCEPTION', 'message', SQLERRM);
 END;
-$$ LANGUAGE plpgsql;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
 
 -------------------------------
 
