@@ -53,7 +53,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
     /// </returns>
     [Tags(tags: "Aggregation Config For FE"), HttpGet(template: "DataGrid/{gridType}")]
     public async Task<APIResponseData<JArray?>> DataGrid(
-        [FromRoute] string? gridType = "ALL",
+        [FromRoute] string? gridType = "all",
         CancellationToken cancellationToken = default
     )
     {
@@ -64,7 +64,7 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
                 message: "Grid type cannot be null, empty or whitespace."
             );
 
-            var allowedGridTypes = new[] { "ALL", "LAST_ACTIVE", "LAST_VERSION" };
+            var allowedGridTypes = new[] { "all", "last_active", "last_version" };
             if (
                 !allowedGridTypes.Contains(
                     value: gridType,
@@ -753,17 +753,17 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
                                 new PostgreHelper.SPParameter
                                 {
                                     Name = "p_json_list",
-                                    Value = payload.JsonList,
+                                    Value = payload.JsonList?.ToString(),
                                 },
                                 new PostgreHelper.SPParameter
                                 {
                                     Name = "p_json_condition",
-                                    Value = payload.JsonCondition,
+                                    Value = payload.JsonCondition?.ToString(),
                                 },
                                 new PostgreHelper.SPParameter
                                 {
                                     Name = "p_config_final",
-                                    Value = payload.ConfigFinal,
+                                    Value = payload.ConfigFinal?.ToString(),
                                 },
                             ],
                         },
@@ -907,17 +907,17 @@ public class AggregateConfigForFe(SystemLogging systemLogging, PostgreHelper pgH
                                 new PostgreHelper.SPParameter
                                 {
                                     Name = "p_json_list",
-                                    Value = payload.JsonList,
+                                    Value = payload.JsonList?.ToString(),
                                 },
                                 new PostgreHelper.SPParameter
                                 {
                                     Name = "p_json_condition",
-                                    Value = payload.JsonCondition,
+                                    Value = payload.JsonCondition?.ToString(),
                                 },
                                 new PostgreHelper.SPParameter
                                 {
                                     Name = "p_config_final",
-                                    Value = payload.ConfigFinal,
+                                    Value = payload.ConfigFinal?.ToString(),
                                 },
                             ],
                         },

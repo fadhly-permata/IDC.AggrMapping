@@ -175,7 +175,7 @@ public class AggrConfigFeModel
         /// </summary>
         [JsonProperty(propertyName: "final_config")]
         [JsonPropertyName(name: "final_config")]
-        public JArray? ConfigFinal { get; set; }
+        public JObject? ConfigFinal { get; set; }
     }
 
     /// <summary>
