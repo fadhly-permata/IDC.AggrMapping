@@ -85,14 +85,18 @@ public partial class UpsertAndAggregatePayloadModel
         return this;
     }
 
-    internal async Task Validate()
+    internal async Task Validate(GlobalConfigurationModel? gcm = null)
     {
         await Task.CompletedTask;
 
         if (OperationType == OperationTypes.InsertData)
         {
-            if (Code.Split(',').Length is < 1 or > 5)
-                throw new DataException(s: "The number of Map Codes must be between 1 and 5.");
+            var gcmMaxMapCount = gcm?.MaxMapCount ?? 5;
+            var codeCount = Code.Split(separator: ',').Length;
+            if (codeCount < 1 || codeCount > gcmMaxMapCount)
+                throw new DataException(
+                    s: $"The number of Map Codes must be between 1 and {gcmMaxMapCount}."
+                );
         }
         else
         {

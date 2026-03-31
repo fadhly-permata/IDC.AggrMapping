@@ -17,7 +17,7 @@ internal class LogDataModel
         ML_WF_OR_DF,
     }
 
-    public required string BatchCode { get; set; }
+    public required string BatchId { get; set; }
     public required int ProcessIndex { get; set; }
     public required int TotalProcess { get; set; }
 
@@ -37,7 +37,7 @@ internal class LogDataModel
                 SPName = "upsert_multilayer_aggregate_proc",
                 Parameters =
                 [
-                    new PostgreHelper.SPParameter { Name = "p_batch_no", Value = BatchCode },
+                    new PostgreHelper.SPParameter { Name = "p_batch_no", Value = BatchId },
                     new PostgreHelper.SPParameter
                     {
                         Name = "p_process_index",

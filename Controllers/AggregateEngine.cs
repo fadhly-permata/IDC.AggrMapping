@@ -73,7 +73,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     ///     - Message: Error message if status is "Failed"
     ///     - Data: JObject containing the log entries for the configuration
     /// </returns>
-    [Tags(tags: "Aggregation"), HttpPost(template: "SingleAggregate")]
+    [Tags(tags: "Aggregation"), HttpPost(template: "Aggregator")]
     public async Task<APIResponseData<object?>> SingleAggregate(
         [FromBody] UpsertAndAggregatePayloadModel payload,
         CancellationToken cancellationToken = default
@@ -120,7 +120,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
             await jqe.SaveLog(
                 logData: new LogDataModel
                 {
-                    BatchCode = payload.BatchId,
+                    BatchId = payload.BatchId,
                     TotalProcess = payload.TotalProcess,
                     ProcessIndex = payload.ProcessIndex,
                     ProcessType = LogDataModel.ProcessKind.ML_AGGREGATE,
@@ -173,7 +173,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
     ///     2. Error handling per item (errors are logged but don't stop processing)
     ///     3. Detailed logging for each processed item
     /// </remarks>
-    [Tags(tags: "Aggregation"), HttpPost(template: "MultipleAggregate")]
+    [Tags(tags: "Aggregation"), HttpPost(template: "MultipleAggregator")]
     public async Task<APIResponseData<object?>> MultipleAggregate(
         [FromBody] UpsertAndAggregatePayloadModel payload,
         CancellationToken cancellationToken = default
@@ -220,15 +220,15 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
                 await jqe.SaveLog(
                     logData: new LogDataModel
                     {
-                        BatchCode = payload.BatchId,
+                        BatchId = payload.BatchId,
                         ProcessIndex = itemIndex,
                         TotalProcess = payload.TotalProcess,
                         ProcessType = LogDataModel.ProcessKind.ML_AGGREGATE,
                         ProcessCode = payload.Code,
-                        Request = item.ToString(Newtonsoft.Json.Formatting.None),
+                        Request = item.ToString(formatting: Newtonsoft.Json.Formatting.None),
                         Response =
                             errorMessage == null
-                                ? itemResult.ToString(Newtonsoft.Json.Formatting.None)
+                                ? itemResult.ToString(formatting: Newtonsoft.Json.Formatting.None)
                                 : null,
                         Log = errorMessage,
                     },
@@ -236,7 +236,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
                     cancellationToken: cancellationToken
                 );
 
-                result.Add(itemResult);
+                result.Add(item: itemResult);
             }
 
             return new APIResponseData<object?>().ChangeData(data: result);

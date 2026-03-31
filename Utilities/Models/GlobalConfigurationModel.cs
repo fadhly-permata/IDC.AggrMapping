@@ -98,7 +98,7 @@ public partial class GlobalConfigurationModel
             spCallInfo: new PostgreHelper.SPCallInfo
             {
                 Schema = "aggregation",
-                SPName = "get_global_configs",
+                SPName = "acv_get_global_configs",
                 Parameters =
                 [
                     new PostgreHelper.SPParameter
