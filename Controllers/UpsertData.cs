@@ -15,7 +15,7 @@ namespace IDC.AggrMapping.Controllers;
 /// </summary>
 [Route(template: "AggrMapping/[controller]")]
 [ApiController]
-public class InsertEngine(Caching caching, PostgreHelper pgHelper, SystemLogging systemLogging)
+public class UpsertEngine(Caching caching, PostgreHelper pgHelper, SystemLogging systemLogging)
     : ControllerBase
 {
     /// <summary>

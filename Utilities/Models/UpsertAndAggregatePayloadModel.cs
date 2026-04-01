@@ -19,7 +19,7 @@ public partial class UpsertAndAggregatePayloadModel : BaseModel<UpsertAndAggrega
     [
         JsonProperty(propertyName: "batch_id"),
         JsonPropertyName(name: "batch_id"),
-        Required(AllowEmptyStrings = false)
+    // Required(AllowEmptyStrings = false)
     ]
     public string BatchId { get; set; } = string.Empty;
 
@@ -107,7 +107,8 @@ public partial class UpsertAndAggregatePayloadModel
         }
 
         Data.ThrowIfNull(paramName: nameof(Data));
-        BatchId.ThrowIfNullOrWhitespace(paramName: nameof(BatchId));
+
+        // BatchId.ThrowIfNullOrWhitespace(paramName: nameof(BatchId));
 
         if (TotalProcess is < 1 or > 100)
             throw new DataException(s: "Total items must be between 1 and 100.");

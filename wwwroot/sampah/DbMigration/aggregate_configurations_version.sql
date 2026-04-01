@@ -772,6 +772,34 @@ $function$
 ;
 
 
+---------------------------------
+
+-- Stored procedure untuk generate batch_no baru
+CREATE OR REPLACE FUNCTION log_data_proc.acv_generate_batch_no()
+RETURNS VARCHAR
+LANGUAGE plpgsql
+AS $$DECLARE
+    v_today VARCHAR := TO_CHAR(CURRENT_DATE, 'YYYYMMDD');
+    v_max_increment INT;
+    v_next_increment INT;
+    v_batch_no VARCHAR;
+BEGIN
+    -- Cari nilai increment tertinggi untuk hari ini
+    SELECT COALESCE(MAX(CAST(SUBSTRING(batch_no FROM 15 FOR 7) AS INT)), 0)
+    INTO v_max_increment
+    FROM log_data_proc.multilayer_aggregate_proc
+    WHERE batch_no LIKE 'BATCH-' || v_today || '-%';
+
+    -- Hitung increment berikutnya
+    v_next_increment := v_max_increment + 1;
+    
+    -- Format batch_no dengan padding 7 digit
+    v_batch_no := 'BATCH-' || v_today || '-' || LPAD(v_next_increment::TEXT, 7, '0');
+    
+    RETURN v_batch_no;
+END;$$;
+
+
 
 -- =============================================
 -- Sampling BARU
