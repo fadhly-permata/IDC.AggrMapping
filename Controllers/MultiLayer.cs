@@ -145,7 +145,11 @@ public partial class MultiLayer(
         }
     }
 
-    private async Task ExecuteAggregationAndFlowAsync(
+    /// <summary>
+    ///     Proses Aggregation dan WF/DF
+    /// </summary>
+    [ApiExplorerSettings(IgnoreApi = true), HttpPost(template: "AggregationAndFlow")]
+    public async Task ExecuteAggregationAndFlowAsync(
         MultiLayerPayloadModel payload,
         string batchId,
         int index,
