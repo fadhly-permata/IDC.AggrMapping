@@ -1,4 +1,5 @@
 using System.Data;
+using Hangfire;
 using IDC.AggrMapping.Utilities;
 using IDC.AggrMapping.Utilities.Models;
 using IDC.Utilities;
@@ -13,7 +14,7 @@ using Newtonsoft.Json.Linq;
 namespace IDC.AggrMapping.Controllers;
 
 /// <summary>
-///     asdasd
+///     Controller for Multi-Layer Aggregation
 /// </summary>
 [Route(template: "AggrMapping/[controller]")]
 [ApiController]
@@ -26,20 +27,73 @@ public partial class MultiLayer(
 ) : ControllerBase
 {
     /// <summary>
-    ///     asdasd
+    ///     Processes a multi-layer aggregation and mapping workflow.
     /// </summary>
-    /// <param name="payload"></param>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    /// <exception cref="DataException"></exception>
+    /// <remarks>
+    ///     This endpoint processes data through multiple layers including:
+    ///     - Data aggregation using specified mapping configurations
+    ///     - Workflow or decision flow processing based on the flow code
+    ///     - Batch processing with detailed logging and error handling
+    ///
+    ///     Sample request:
+    ///     ```json
+    ///     POST /AggrMapping/MultiLayer/MultiLayer
+    ///     Content-Type: application/json
+    ///
+    ///     {
+    ///         "flow_code": "D12345",
+    ///         "wftype": "SampleWorkflow",
+    ///         "confMaptable": ["MAP001", "MAP002"],
+    ///         "confAggMapCode": "AGG001",
+    ///         "data": [
+    ///             { "field1": "value1" },
+    ///             { "field1": "value2" }
+    ///         ]
+    ///     }
+    ///     ```
+    ///
+    ///     **Notes:**
+    ///     - `flow_code` determines the type of flow to execute (Workflow or Decision Flow)
+    ///     - When `flow_code` starts with 'W', `wftype` is required
+    ///     - `confMaptable` must contain at least one valid mapping configuration
+    ///     - `confAggMapCode` specifies the aggregation configuration to use
+    ///     - `data` contains the payload to be processed (max items configured in global settings)
+    /// </remarks>
+    /// <param name="payload">
+    ///     The multi-layer processing payload containing:
+    ///     - flow_code (string, required): Determines the processing flow (starts with 'W' for workflow, 'D' for decision flow)
+    ///     - wftype (string, optional): Required when flow_code starts with 'W'
+    ///     - confMaptable (array of strings, required): List of mapping configuration codes
+    ///     - confAggMapCode (string, required): Aggregation mapping configuration code
+    ///     - data (array of objects, required): The data to be processed
+    /// </param>
+    /// <param name="cancellationToken">
+    ///     Cancellation token for the asynchronous operation
+    /// </param>
+    /// <returns>
+    ///     APIResponseData with:
+    ///     - Status: "Success" or "Failed"
+    ///     - Message: Error message if status is "Failed"
+    ///     - Data: Batch ID of the processed request
+    /// </returns>
+    /// <exception cref="DataException">
+    ///     Thrown when:
+    ///     - Validation of payload fails
+    ///     - Aggregation process fails
+    ///     - Workflow/Decision flow processing fails
+    /// </exception>
     [Tags(tags: "Multi Layer"), HttpPost(template: "MultiLayer")]
-    public async Task<APIResponseData<object?>> Process(
+    public async Task<APIResponseData<object?>> ProcessAsync(
         MultiLayerPayloadModel payload,
         CancellationToken cancellationToken
     )
     {
+        string batchId = string.Empty;
+
         try
         {
+            batchId = await BatchIdGenerator(cancellationToken: cancellationToken);
+
             payload.Validate(
                 configs: await new GlobalConfigurationModel().GetGlobalConfigurationsAsync(
                     pgHelper: pgHelper,
@@ -48,94 +102,39 @@ public partial class MultiLayer(
                 )
             );
 
-            var batchId = await BatchIdGenerator(cancellationToken: cancellationToken);
-
             await UpsertProcess(
                 batchId: batchId,
                 payload: payload,
                 cancellationToken: cancellationToken
             );
 
+            // proses setiap data dengan menggunakan job.
             for (var index = 0; index < payload.Data.Count; index++)
             {
-                try
-                {
-                    var aggPload = payload.CastToAggregatePayload(
-                        batchId: batchId,
-                        totalProcess: payload.Data.Count,
-                        dataIndex: index
-                    );
-
-                    var result = await new AggregateEngine(
-                        systemLogging: systemLogging,
-                        caching: caching,
-                        pgHelper: pgHelper
-                    ).SingleAggregate(payload: aggPload, cancellationToken: cancellationToken);
-
-                    if (result.Status != null || result.Status?.ToLower() == "failed")
-                        throw new DataException(
-                            s: "Aggregation process failed, can not continue to processing workflow."
-                        );
-
-                    // objek buat WF/DF
-                    var joResult =
-                        result.Data as JObject
-                        ?? throw new DataException(
-                            s: $"Failed to get result of aggregation with code '{payload.ConfAggMapCode}'."
-                        );
-
-                    object dfWfResult;
-                    if (payload.FlowCode[..1] == "W")
-                    {
-                        // PROSES HIT WF
-                        var token = await GenerateToken(cancellationToken: cancellationToken);
-                        var wfData = payload.Data[index: index] as JObject;
-
-                        dfWfResult = await WorkFlowProcessor(
-                            body: wfData!,
-                            headers: new Dictionary<string, string>()
-                            {
-                                { "wfcode", payload.FlowCode },
-                                {
-                                    "wftype",
-                                    payload.WorkflowType
-                                        ?? throw new DataException(
-                                            s: "Can not hit workflow without wftype."
-                                        )
-                                },
-                                { "Authorization", $"Bearer {token}" },
-                            },
-                            cancellationToken: cancellationToken
-                        );
-                    }
-                    else
-                    {
-                        var dfData = payload.Data[index: index] as JObject;
-                        dfData?.Merge(content: joResult);
-
-                        // PROCESS HIT DF
-                        dfWfResult = await DecisionFlowProcessor(
-                            body: new JObject()
-                            {
-                                { "code", payload.FlowCode },
-                                { "data", dfData },
-                            },
-                            cancellationToken: cancellationToken
-                        );
-                    }
-
-                    Console.WriteLine(value: dfWfResult);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(value: e.Message);
-                }
+                var cIndex = index;
+                BackgroundJob.Schedule(
+                    methodCall: () =>
+                        ExecuteAggregationAndFlowAsync(payload, batchId, cIndex, cancellationToken),
+                    delay: TimeSpan.FromSeconds(1)
+                );
             }
 
-            return new APIResponseData<object?>().ChangeData(data: batchId);
+            return new APIResponseData<object?>();
         }
         catch (Exception ex)
         {
+            _ = new LogDataModel
+            {
+                BatchId = batchId,
+                ProcessCode = payload.ConfAggMapCode,
+                ProcessType = LogDataModel.ProcessKind.ML_WF_OR_DF,
+                ProcessIndex = 0,
+                TotalProcess = payload.Data.Count,
+                Log = ex.Message,
+                Request = payload.Data.ToString(),
+                Response = null,
+            }.Save(pgHelper: pgHelper, cancellationToken: cancellationToken);
+
             return new APIResponseData<object?>()
                 .ChangeStatus(status: "Failed")
                 .ChangeMessage(
@@ -143,6 +142,105 @@ public partial class MultiLayer(
                     logging: systemLogging,
                     includeStackTrace: Commons.IS_DEBUG_MODE
                 );
+        }
+    }
+
+    private async Task ExecuteAggregationAndFlowAsync(
+        MultiLayerPayloadModel payload,
+        string batchId,
+        int index,
+        CancellationToken cancellationToken
+    )
+    {
+        var aggResult = await new AggregateEngine(
+            systemLogging: systemLogging,
+            caching: caching,
+            pgHelper: pgHelper
+        ).SingleAggregate(
+            payload: payload.CastToAggregatePayload(
+                batchId: batchId,
+                totalProcess: payload.Data.Count,
+                dataIndex: index
+            ),
+            cancellationToken: cancellationToken
+        );
+
+        // jalankan WF/DF
+        try
+        {
+            if (aggResult.Status != null || aggResult.Status?.ToLower() == "failed")
+                throw new DataException(
+                    s: "Aggregation process failed, can not continue to processing workflow."
+                );
+
+            // objek buat WF/DF
+            var joResult =
+                aggResult.Data as JObject
+                ?? throw new DataException(
+                    s: $"Failed to get result of aggregation with code '{payload.ConfAggMapCode}'."
+                );
+
+            object dfWfResult;
+            if (payload.FlowCode[..1] == "W")
+            {
+                // PROSES HIT WF
+                var token = await GenerateToken(cancellationToken: cancellationToken);
+                var wfData = payload.Data[index: index] as JObject;
+
+                dfWfResult = await WorkFlowProcessor(
+                    body: wfData!,
+                    headers: new Dictionary<string, string>()
+                    {
+                        { "wfcode", payload.FlowCode },
+                        {
+                            "wftype",
+                            payload.WorkflowType
+                                ?? throw new DataException(
+                                    s: "Can not hit workflow without wftype."
+                                )
+                        },
+                        { "Authorization", $"Bearer {token}" },
+                    },
+                    cancellationToken: cancellationToken
+                );
+            }
+            else
+            {
+                var dfData = payload.Data[index: index] as JObject;
+                dfData?.Merge(content: joResult);
+
+                // PROCESS HIT DF
+                dfWfResult = await DecisionFlowProcessor(
+                    body: new JObject() { { "code", payload.FlowCode }, { "data", dfData } },
+                    cancellationToken: cancellationToken
+                );
+            }
+
+            _ = new LogDataModel
+            {
+                BatchId = batchId,
+                ProcessCode = payload.FlowCode,
+                ProcessType = LogDataModel.ProcessKind.ML_WF_OR_DF,
+                ProcessIndex = index + 1,
+                TotalProcess = payload.Data.Count,
+                Log = null,
+                Request = payload.Data[index: index].ToString(),
+                Response = dfWfResult.ToString(),
+            }.Save(pgHelper: pgHelper, cancellationToken: cancellationToken);
+        }
+        catch (Exception e)
+        {
+            _ = new LogDataModel
+            {
+                BatchId = batchId,
+                ProcessCode = payload.FlowCode,
+                ProcessType = LogDataModel.ProcessKind.ML_WF_OR_DF,
+                ProcessIndex = index + 1,
+                TotalProcess = payload.Data.Count,
+                Log = e.Message,
+                Request = payload.Data[index: index].ToString(),
+                Response = null,
+            }.Save(pgHelper: pgHelper, cancellationToken: cancellationToken);
         }
     }
 }
@@ -166,9 +264,9 @@ public partial class MultiLayer
     private static async Task<T> ExecuteApiRequestAsync<T>(ExecuteApiRequestOptions<T> options)
     {
         var baseAddress =
-            options.AppSettings.Get<string>(options.BaseAddressKey)
+            options.AppSettings.Get<string>(path: options.BaseAddressKey)
             ?? throw new InvalidOperationException(
-                $"Can not find API Settings for '{options.BaseAddressKey}'."
+                message: $"Can not find API Settings for '{options.BaseAddressKey}'."
             );
 
         var apiResult =
@@ -177,11 +275,11 @@ public partial class MultiLayer
                 content: options.Content,
                 headers: options.Headers,
                 cancellationToken: options.CancellationToken
-            ) ?? throw new InvalidOperationException(options.ErrorMessage);
+            ) ?? throw new InvalidOperationException(message: options.ErrorMessage);
 
-        return !options.ValidateResponse(apiResult)
-            ? throw new InvalidOperationException(options.ErrorMessage)
-            : options.ExtractData(apiResult);
+        return !options.ValidateResponse(arg: apiResult)
+            ? throw new InvalidOperationException(message: options.ErrorMessage)
+            : options.ExtractData(arg: apiResult);
     }
 
     private async Task UpsertProcess(
@@ -211,7 +309,7 @@ public partial class MultiLayer
             valueFactory: async () =>
             {
                 var token = await ExecuteApiRequestAsync(
-                    new ExecuteApiRequestOptions<string>
+                    options: new ExecuteApiRequestOptions<string>
                     {
                         HttpClient = httpClient,
                         BaseAddressKey = "APISettings.urlAPI_idccore",
@@ -221,25 +319,25 @@ public partial class MultiLayer
                         {
                             {
                                 "username",
-                                appSettings.Get<string>("TokenAuthentication.UserName")
+                                appSettings.Get<string>(path: "TokenAuthentication.UserName")
                                     ?? throw new InvalidOperationException(
-                                        "Can not find username for token generation."
+                                        message: "Can not find username for token generation."
                                     )
                             },
                             {
                                 "password",
-                                appSettings.Get<string>("TokenAuthentication.Password")
+                                appSettings.Get<string>(path: "TokenAuthentication.Password")
                                     ?? throw new InvalidOperationException(
-                                        "Can not find password for token generation."
+                                        message: "Can not find password for token generation."
                                     )
                             },
                         },
                         ValidateResponse = response =>
-                            response.PropGet<bool?>("success", throwOnNull: true) == true,
+                            response.PropGet<bool?>(path: "success", throwOnNull: true) == true,
                         ExtractData = response =>
-                            response.PropGet<string>("access_token", throwOnNull: true)
+                            response.PropGet<string>(path: "access_token", throwOnNull: true)
                             ?? throw new InvalidOperationException(
-                                "Access token not found in response."
+                                message: "Access token not found in response."
                             ),
                         AppSettings = appSettings,
                         ErrorMessage = "Fetching API token failed.",
@@ -270,8 +368,8 @@ public partial class MultiLayer
                 ValidateResponse = response =>
                     response.PropGet<string>(path: "status", throwOnNull: true) != "Failed",
                 ExtractData = response =>
-                    response.PropGet<JObject>("data", throwOnNull: true)
-                    ?? throw new InvalidOperationException("Data not found in response."),
+                    response.PropGet<JObject>(path: "data", throwOnNull: true)
+                    ?? throw new InvalidOperationException(message: "Data not found in response."),
                 AppSettings = appSettings,
                 ErrorMessage = "Calling decision flow failed.",
                 CancellationToken = cancellationToken,
@@ -296,8 +394,8 @@ public partial class MultiLayer
                 ValidateResponse = response =>
                     response.PropGet<string>(path: "status", throwOnNull: true) != "Failed",
                 ExtractData = response =>
-                    response.PropGet<JObject>("data", throwOnNull: true)
-                    ?? throw new InvalidOperationException("Data not found in response."),
+                    response.PropGet<JObject>(path: "data", throwOnNull: true)
+                    ?? throw new InvalidOperationException(message: "Data not found in response."),
                 AppSettings = appSettings,
                 ErrorMessage = "Calling work flow failed.",
                 CancellationToken = cancellationToken,
