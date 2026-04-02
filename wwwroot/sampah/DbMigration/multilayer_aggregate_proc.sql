@@ -31,6 +31,91 @@ CREATE TABLE log_data_proc.multilayer_aggregate_proc (
 );
 
 
+
+
+
+---------------------------------
+-- DROP FUNCTION log_data_proc.acv_generate_batch_no(varchar);
+
+CREATE OR REPLACE FUNCTION log_data_proc.acv_generate_batch_no(p_prefix character varying DEFAULT 'BATCH'::character varying)
+ RETURNS character varying
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_today VARCHAR := TO_CHAR(CURRENT_DATE, 'YYYYMMDD');
+    v_max_increment INT;
+    v_next_increment INT;
+    v_batch_no VARCHAR;
+    v_pattern TEXT := '^' || p_prefix || '-' || v_today || '-(\d{7})$';
+BEGIN
+    -- Cari nilai increment tertinggi untuk hari ini dengan pattern yang lebih ketat
+    SELECT COALESCE(MAX(CAST(SUBSTRING(match[1] FROM 1 FOR 7) AS INT)), 0)
+    INTO v_max_increment
+    FROM (
+        SELECT regexp_matches(batch_no, v_pattern) as match
+        FROM log_data_proc.multilayer_aggregate_proc
+        WHERE batch_no ~ v_pattern
+    ) subq;
+
+    -- Hitung increment berikutnya
+    v_next_increment := v_max_increment + 1;
+
+    -- Format batch_no dengan padding 7 digit
+    v_batch_no := p_prefix || '-' || v_today || '-' || LPAD(v_next_increment::TEXT, 7, '0');
+
+    RETURN v_batch_no;
+END;
+$function$
+;
+
+--------------------
+-- DROP FUNCTION log_data_proc.upsert_multilayer_aggregate_proc(varchar, varchar, varchar, int4, int4, json, json, text);
+
+CREATE OR REPLACE FUNCTION log_data_proc.upsert_multilayer_aggregate_proc(p_batch_no character varying, p_process_type character varying, p_process_code character varying, p_process_index integer, p_total_process integer, p_request json DEFAULT NULL::json, p_response json DEFAULT NULL::json, p_log text DEFAULT NULL::text)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_affected_rows INTEGER;
+BEGIN
+    INSERT INTO "log_data_proc".multilayer_aggregate_proc (
+        batch_no,
+        process_type,
+        process_code,
+        process_index,
+        total_process,
+        request,
+        response,
+        log
+    )
+    VALUES (
+        p_batch_no,
+        p_process_type::"log_data_proc".process_type_enum,
+        p_process_code,
+        p_process_index,
+        p_total_process,
+        p_request,
+        p_response,
+        p_log
+    )
+    ON CONFLICT (batch_no, process_code, process_index) DO UPDATE
+    SET
+        process_type = EXCLUDED.process_type,
+        total_process = EXCLUDED.total_process,
+        request = EXCLUDED.request,
+        response = EXCLUDED.response,
+        log = EXCLUDED.log,
+        updated_at = CURRENT_TIMESTAMP;
+
+    GET DIAGNOSTICS v_affected_rows = ROW_COUNT;
+    
+    RETURN v_affected_rows;
+END;
+$function$
+;
+
+
+
 -- ======================
 -- DATA SAMPLING
 -- ======================
