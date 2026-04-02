@@ -113,18 +113,11 @@ public partial class MultiLayer(
             for (var index = 0; index < payload.Data.Count; index++)
             {
                 var cIndex = index;
-                await ExecuteAggregationAndFlowAsync(
-                    payload: payload,
-                    batchId: batchId,
-                    index: cIndex,
-                    cancellationToken: cancellationToken
+                BackgroundJob.Schedule(
+                    methodCall: () =>
+                        ExecuteAggregationAndFlowAsync(payload, batchId, cIndex, cancellationToken),
+                    delay: TimeSpan.FromSeconds(1)
                 );
-
-                // BackgroundJob.Schedule(
-                //     methodCall: () =>
-                //         ExecuteAggregationAndFlowAsync(payload, batchId, cIndex, cancellationToken),
-                //     delay: TimeSpan.FromSeconds(1)
-                // );
             }
 
             return new APIResponseData<object?>();
@@ -288,14 +281,15 @@ public partial class MultiLayer
                 message: $"Can not find API Settings for '{options.BaseAddressKey}'."
             );
 
-        var apiResult = await options.HttpClient.PostJObjectAsync(
-            uri: $"{baseAddress}{options.Endpoint}",
-            content: options.Content,
-            headers: options.Headers,
-            timeoutSeconds: 120,
-            ensureStatusCodeSuccess: false,
-            cancellationToken: options.CancellationToken
-        ); // ?? throw new InvalidOperationException(message: options.ErrorMessage);
+        var apiResult =
+            await options.HttpClient.PostJObjectAsync(
+                uri: $"{baseAddress}{options.Endpoint}",
+                content: options.Content,
+                headers: options.Headers,
+                timeoutSeconds: 120,
+                ensureStatusCodeSuccess: false,
+                cancellationToken: options.CancellationToken
+            ) ?? throw new InvalidOperationException(message: options.ErrorMessage);
 
         return !options.ValidateResponse(arg: apiResult)
             ? throw new InvalidOperationException(message: apiResult.ToString())
