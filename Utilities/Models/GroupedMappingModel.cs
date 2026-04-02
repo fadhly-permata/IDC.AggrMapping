@@ -242,7 +242,7 @@ internal class GroupedMappingModel : BaseModel<GroupedMappingModel>
         {
             var payloadData = payload.Data is IEnumerable<object> data
                 ? data.ToList()
-                : throw new DataException("Payload data is not an enumerable collection.");
+                : throw new DataException(s: "Payload data is not an enumerable collection.");
 
             foreach (var group in GroupedMappings)
             {
@@ -256,7 +256,7 @@ internal class GroupedMappingModel : BaseModel<GroupedMappingModel>
                         itemIndex++;
                         try
                         {
-                            var jObject = JObject.FromObject(dataItem);
+                            var jObject = JObject.FromObject(o: dataItem);
                             var columns = new List<string>();
                             var values = new List<string>();
                             var updateSet = new List<string>();
@@ -265,18 +265,18 @@ internal class GroupedMappingModel : BaseModel<GroupedMappingModel>
                             // Process each field mapping
                             foreach (var field in group.FieldMappings)
                             {
-                                var token = jObject[field.SourceField];
+                                var token = jObject[propertyName: field.SourceField];
                                 if (token == null || token.Type == JTokenType.Null)
                                     continue;
 
                                 var value = token.ToString();
-                                if (string.IsNullOrWhiteSpace(value))
+                                if (string.IsNullOrWhiteSpace(value: value))
                                     continue;
 
-                                columns.Add(field.DestinationColumn);
+                                columns.Add(item: field.DestinationColumn);
                                 values.Add(
-                                    field.RequiresQuotation()
-                                        ? $"'{value.Replace("'", "''")}'"
+                                    item: field.RequiresQuotation()
+                                        ? $"'{value.Replace(oldValue: "'", newValue: "''")}'"
                                         : value
                                 );
 
@@ -284,8 +284,8 @@ internal class GroupedMappingModel : BaseModel<GroupedMappingModel>
                                 if (!field.IsPrimaryKey)
                                 {
                                     updateSet.Add(
-                                        field.RequiresQuotation()
-                                            ? $"{field.DestinationColumn} = '{value.Replace("'", "''")}'"
+                                        item: field.RequiresQuotation()
+                                            ? $"{field.DestinationColumn} = '{value.Replace(oldValue: "'", newValue: "''")}'"
                                             : $"{field.DestinationColumn} = {value}"
                                     );
                                 }
@@ -295,28 +295,28 @@ internal class GroupedMappingModel : BaseModel<GroupedMappingModel>
 
                             if (!hasValidData)
                             {
-                                result.Add($"{itemIndex}: No valid columns found");
+                                result.Add(item: $"{itemIndex}: No valid columns found");
                                 continue;
                             }
 
                             var primaryKeyColumn =
                                 group
-                                    .FieldMappings.FirstOrDefault(x => x.IsPrimaryKey)
+                                    .FieldMappings.FirstOrDefault(predicate: x => x.IsPrimaryKey)
                                     ?.DestinationColumn
                                 ?? throw new InvalidOperationException(
-                                    "Primary key column not found"
+                                    message: "Primary key column not found"
                                 );
 
                             var onConflictAction =
                                 updateSet.Count > 0
-                                    ? $"DO UPDATE SET {string.Join(", ", updateSet)}"
+                                    ? $"DO UPDATE SET {string.Join(separator: ", ", values: updateSet)}"
                                     : "DO NOTHING";
 
                             var strQuery = $"""
                                 INSERT INTO {group.Destination.Schema}.{group.Destination.Table}
-                                ({string.Join(", ", columns)})
+                                ({string.Join(separator: ", ", values: columns)})
                                 VALUES
-                                ({string.Join(", ", values)})
+                                ({string.Join(separator: ", ", values: values)})
                                 ON CONFLICT ({primaryKeyColumn})
                                 {onConflictAction}
                                 RETURNING 1;
@@ -324,9 +324,9 @@ internal class GroupedMappingModel : BaseModel<GroupedMappingModel>
 
                             // Always use dblink for all database connections
                             var dbName = group.Destination.DbName;
-                            if (dbName.StartsWith("idc."))
+                            if (dbName.StartsWith(value: "idc."))
                             {
-                                dbName = dbName.Substring(4);
+                                dbName = dbName.Substring(startIndex: 4);
                             }
 
                             var finalQuery = $"""
@@ -335,47 +335,52 @@ internal class GroupedMappingModel : BaseModel<GroupedMappingModel>
                                 CROSS JOIN LATERAL
                                     dblink(
                                         conn_str, 
-                                        '{strQuery.Replace("'", "''")}'
+                                        '{strQuery.Replace(oldValue: "'", newValue: "''")}'
                                     ) as t(result int);
                                 """;
 
                             await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
                             await pgHelper.ExecuteScalarAsync(
-                                finalQuery,
-                                _ => { },
-                                cancellationToken
+                                query: finalQuery,
+                                callback: _ => { },
+                                cancellationToken: cancellationToken
                             );
 
-                            result.Add($"{itemIndex}: Process completed successfully");
+                            result.Add(item: $"{itemIndex}: Process completed successfully");
                         }
                         catch (Exception ex) when (ex is not OperationCanceledException)
                         {
-                            result.Add($"{itemIndex}: {ex.Message}");
+                            result.Add(item: $"{itemIndex}: {ex.Message}");
                         }
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    result.Add($"{itemIndex}: {groupIdentifier} - {ex.Message}");
+                    result.Add(item: $"{itemIndex}: {groupIdentifier} - {ex.Message}");
                 }
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            result.Add($"FATAL_ERROR: {ex.Message}");
+            result.Add(item: $"FATAL_ERROR: {ex.Message}");
         }
 
         // Format output sebagai array JSON
-        log.AppendLine("[");
+        log.AppendLine(value: "[");
         if (result.Count > 0)
         {
             log.AppendLine(
-                "  \""
-                    + string.Join("\",\n  \"", result.Select(r => r.Replace("\"", "\\\"")))
+                value: "  \""
+                    + string.Join(
+                        separator: "\",\n  \"",
+                        values: result.Select(selector: r =>
+                            r.Replace(oldValue: "\"", newValue: "\\\"")
+                        )
+                    )
                     + "\""
             );
         }
-        log.AppendLine("]");
+        log.AppendLine(value: "]");
 
         return log;
     }

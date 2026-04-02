@@ -66,3 +66,11 @@
     Target = "~M:IDC.AggrMapping.Program.SetupHangfire(Microsoft.AspNetCore.Builder.WebApplicationBuilder)~Microsoft.AspNetCore.Builder.WebApplicationBuilder",
     Justification = "Sonarqube salah analisa, gak ada password di dalam method tersebut."
 )]
+
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage(
+    category: "SonarAnalyzer",
+    checkId: "S125",
+    Scope = "member",
+    Target = "~M:IDC.AggrMapping.Utilities.Models.UpsertAndAggregatePayloadModel.Validate(IDC.AggrMapping.Utilities.Models.GlobalConfigurationModel)~System.Threading.Tasks.Task",
+    Justification = "Sengaja di keep untuk sementara waktu, sampai proses testing selesai."
+)]

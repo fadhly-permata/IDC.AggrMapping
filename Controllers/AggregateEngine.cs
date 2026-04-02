@@ -91,6 +91,12 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
                 )
                 .Validate();
 
+            await payload.AssignNullBatchId(
+                prefix: "SINGLE",
+                pgHelper: pgHelper,
+                cancellationToken: cancellationToken
+            );
+
             var cfg = await new AggConfigEngineModel().Load(
                 aggregateCode: payload.Code,
                 pgHelper: pgHelper,
@@ -186,6 +192,12 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
                     operationType: UpsertAndAggregatePayloadModel.OperationTypes.Aggregation
                 )
                 .Validate();
+
+            await payload.AssignNullBatchId(
+                prefix: "MULTIPLE",
+                pgHelper: pgHelper,
+                cancellationToken: cancellationToken
+            );
 
             var cfg = await new AggConfigEngineModel().Load(
                 aggregateCode: payload.Code,

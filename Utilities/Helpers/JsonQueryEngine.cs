@@ -68,10 +68,6 @@ namespace IDC.AggrMapping.Utilities.Helpers;
 //     - Evaluasi penggunaan org.matheval untuk kemungkinan replacement
 //     - Minimalkan dependency eksternal
 //     - Gunakan source generators untuk mengurangi reflection
-// 15. **Testing & Profiling**
-//     - Tambahkan benchmark untuk operasi kritis
-//     - Lakukan memory profiling secara berkala
-//     - Implementasi stress testing untuk skenario concurrent
 
 internal partial class JsonQueryEngine : IDisposable
 {

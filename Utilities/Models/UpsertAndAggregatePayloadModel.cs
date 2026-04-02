@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Text.Json.Serialization;
+using IDC.Utilities.Data;
 using IDC.Utilities.Extensions;
 using IDC.Utilities.Interfaces;
 using Newtonsoft.Json;
@@ -19,7 +20,8 @@ public partial class UpsertAndAggregatePayloadModel : BaseModel<UpsertAndAggrega
     [
         JsonProperty(propertyName: "batch_id"),
         JsonPropertyName(name: "batch_id"),
-        Required(AllowEmptyStrings = false)
+        System.Text.Json.Serialization.JsonIgnore
+    // Required(AllowEmptyStrings = false)
     ]
     public string BatchId { get; set; } = string.Empty;
 
@@ -107,7 +109,6 @@ public partial class UpsertAndAggregatePayloadModel
         }
 
         Data.ThrowIfNull(paramName: nameof(Data));
-        BatchId.ThrowIfNullOrWhitespace(paramName: nameof(BatchId));
 
         if (TotalProcess is < 1 or > 100)
             throw new DataException(s: "Total items must be between 1 and 100.");
@@ -126,5 +127,47 @@ public partial class UpsertAndAggregatePayloadModel
             or JObject { Count: 0 }:
                 throw new DataException(s: "Data can not be empty.");
         }
+    }
+
+    internal async Task AssignNullBatchId(
+        string prefix,
+        PostgreHelper pgHelper,
+        CancellationToken cancellationToken = default
+    )
+    {
+        prefix.ThrowIfNullOrWhitespace(
+            paramName: nameof(prefix),
+            message: "Batch Prefix can not be null or empty."
+        );
+
+        if (string.IsNullOrWhiteSpace(value: BatchId))
+            BatchId = await BatchIdGenerator(
+                prefix: prefix,
+                pgHelper: pgHelper,
+                cancellationToken: cancellationToken
+            );
+    }
+
+    private static async Task<string> BatchIdGenerator(
+        string prefix,
+        PostgreHelper pgHelper,
+        CancellationToken cancellationToken = default
+    )
+    {
+        await pgHelper.ConnectAsync(cancellationToken: cancellationToken);
+        var (_, resultBatchNo) = await pgHelper.ExecuteScalarAsync(
+            spCallInfo: new PostgreHelper.SPCallInfo
+            {
+                Schema = "log_data_proc",
+                SPName = "acv_generate_batch_no",
+                Parameters = [new PostgreHelper.SPParameter { Name = "p_prefix", Value = prefix }],
+            },
+            callback: static _ => { },
+            cancellationToken: cancellationToken
+        );
+
+        var strBatchNo =
+            resultBatchNo as string ?? throw new DataException(s: "Failed to get batch no.");
+        return strBatchNo;
     }
 }
