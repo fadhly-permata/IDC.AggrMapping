@@ -35,14 +35,24 @@ internal partial class AggConfigEngineModel
         string aggregateCode,
         PostgreHelper pgHelper,
         Caching caching,
+        SystemLogging systemLogging,
         CancellationToken cancellationToken = default
     )
     {
-        aggregateCode.ThrowIfNullOrWhitespace(paramName: nameof(aggregateCode));
+        aggregateCode.ThrowIfNullOrWhitespace(
+            paramName: nameof(aggregateCode),
+            message: "Aggregate Code can not be null or empty."
+        );
+
+        systemLogging.LogInformation(
+            message: caching.Exists(key: $"AGGCONFIG_{aggregateCode}")
+                ? $"Found aggregate configuration '{aggregateCode}' on cache."
+                : $"Aggregate configuration '{aggregateCode}' not found on cache, and will be loaded from database."
+        );
 
         var result =
             await caching.GetOrSetAsync(
-                key: aggregateCode,
+                key: $"AGGCONFIG_{aggregateCode}",
                 valueFactory: async () =>
                 {
                     await pgHelper.ConnectAsync(cancellationToken: cancellationToken);

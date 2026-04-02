@@ -88,19 +88,20 @@ public partial class MultiLayer(
         CancellationToken cancellationToken
     )
     {
-        string batchId = string.Empty;
+        var batchId = string.Empty;
 
         try
         {
             batchId = await BatchIdGenerator(cancellationToken: cancellationToken);
 
-            payload.Validate(
-                configs: await new GlobalConfigurationModel().GetGlobalConfigurationsAsync(
-                    pgHelper: pgHelper,
-                    caching: caching,
-                    cancellationToken: cancellationToken
-                )
+            var gcm = await new GlobalConfigurationModel().GetGlobalConfigurationsAsync(
+                pgHelper: pgHelper,
+                caching: caching,
+                cancellationToken: cancellationToken
             );
+            systemLogging.LogInformation(message: $"[GLOBAL CONFIG DATA] \n{gcm}");
+
+            payload.Validate(configs: gcm);
 
             await UpsertProcess(
                 batchId: batchId,
@@ -112,11 +113,18 @@ public partial class MultiLayer(
             for (var index = 0; index < payload.Data.Count; index++)
             {
                 var cIndex = index;
-                BackgroundJob.Schedule(
-                    methodCall: () =>
-                        ExecuteAggregationAndFlowAsync(payload, batchId, cIndex, cancellationToken),
-                    delay: TimeSpan.FromSeconds(1)
+                await ExecuteAggregationAndFlowAsync(
+                    payload: payload,
+                    batchId: batchId,
+                    index: cIndex,
+                    cancellationToken: cancellationToken
                 );
+
+                // BackgroundJob.Schedule(
+                //     methodCall: () =>
+                //         ExecuteAggregationAndFlowAsync(payload, batchId, cIndex, cancellationToken),
+                //     delay: TimeSpan.FromSeconds(1)
+                // );
             }
 
             return new APIResponseData<object?>();
@@ -156,6 +164,7 @@ public partial class MultiLayer(
         CancellationToken cancellationToken
     )
     {
+        JObject? bodyRequest = [];
         var aggResult = await new AggregateEngine(
             systemLogging: systemLogging,
             caching: caching,
@@ -172,12 +181,12 @@ public partial class MultiLayer(
         // jalankan WF/DF
         try
         {
-            if (aggResult.Status != null || aggResult.Status?.ToLower() == "failed")
+            if (aggResult == null || aggResult.Status?.ToLower() == "failed")
                 throw new DataException(
                     s: "Aggregation process failed, can not continue to processing workflow."
                 );
 
-            // objek buat WF/DF
+            // data objek buat WF/DF
             var joResult =
                 aggResult.Data as JObject
                 ?? throw new DataException(
@@ -189,10 +198,10 @@ public partial class MultiLayer(
             {
                 // PROSES HIT WF
                 var token = await GenerateToken(cancellationToken: cancellationToken);
-                var wfData = payload.Data[index: index] as JObject;
+                bodyRequest = payload.Data[index: index] as JObject;
 
                 dfWfResult = await WorkFlowProcessor(
-                    body: wfData!,
+                    body: bodyRequest!,
                     headers: new Dictionary<string, string>()
                     {
                         { "wfcode", payload.FlowCode },
@@ -213,9 +222,15 @@ public partial class MultiLayer(
                 var dfData = payload.Data[index: index] as JObject;
                 dfData?.Merge(content: joResult);
 
+                bodyRequest = new JObject()
+                {
+                    { "code", payload.FlowCode },
+                    { "data", new JArray(dfData) },
+                };
+
                 // PROCESS HIT DF
                 dfWfResult = await DecisionFlowProcessor(
-                    body: new JObject() { { "code", payload.FlowCode }, { "data", dfData } },
+                    body: bodyRequest,
                     cancellationToken: cancellationToken
                 );
             }
@@ -228,7 +243,7 @@ public partial class MultiLayer(
                 ProcessIndex = index + 1,
                 TotalProcess = payload.Data.Count,
                 Log = null,
-                Request = payload.Data[index: index].ToString(),
+                Request = bodyRequest?.ToString(),
                 Response = dfWfResult.ToString(),
             }.Save(pgHelper: pgHelper, cancellationToken: cancellationToken);
         }
@@ -242,7 +257,7 @@ public partial class MultiLayer(
                 ProcessIndex = index + 1,
                 TotalProcess = payload.Data.Count,
                 Log = e.Message,
-                Request = payload.Data[index: index].ToString(),
+                Request = bodyRequest?.ToString() ?? payload.Data[index: index].ToString(),
                 Response = null,
             }.Save(pgHelper: pgHelper, cancellationToken: cancellationToken);
         }
@@ -273,16 +288,17 @@ public partial class MultiLayer
                 message: $"Can not find API Settings for '{options.BaseAddressKey}'."
             );
 
-        var apiResult =
-            await options.HttpClient.PostJObjectAsync(
-                uri: $"{baseAddress}{options.Endpoint}",
-                content: options.Content,
-                headers: options.Headers,
-                cancellationToken: options.CancellationToken
-            ) ?? throw new InvalidOperationException(message: options.ErrorMessage);
+        var apiResult = await options.HttpClient.PostJObjectAsync(
+            uri: $"{baseAddress}{options.Endpoint}",
+            content: options.Content,
+            headers: options.Headers,
+            timeoutSeconds: 120,
+            ensureStatusCodeSuccess: false,
+            cancellationToken: options.CancellationToken
+        ); // ?? throw new InvalidOperationException(message: options.ErrorMessage);
 
         return !options.ValidateResponse(arg: apiResult)
-            ? throw new InvalidOperationException(message: options.ErrorMessage)
+            ? throw new InvalidOperationException(message: apiResult.ToString())
             : options.ExtractData(arg: apiResult);
     }
 

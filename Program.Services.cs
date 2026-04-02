@@ -181,7 +181,7 @@ internal partial class Program
     private static WebApplicationBuilder SetupPgsql(this WebApplicationBuilder builder)
     {
         if (_appConfigurations.Get(path: "DependencyInjection.PGSQL", defaultValue: false))
-            builder.Services.AddScoped(implementationFactory: static _ =>
+            builder.Services.AddSingleton(implementationFactory: static _ =>
             {
                 var defaultConString = _appSettings.Get(
                     path: "DefaultConStrings.IDCAggrMapping.PGSQL",

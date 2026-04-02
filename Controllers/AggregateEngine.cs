@@ -101,6 +101,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
                 aggregateCode: payload.Code,
                 pgHelper: pgHelper,
                 caching: caching,
+                systemLogging: systemLogging,
                 cancellationToken: cancellationToken
             );
 
@@ -203,6 +204,7 @@ public class AggregateEngine(SystemLogging systemLogging, Caching caching, Postg
                 aggregateCode: payload.Code,
                 pgHelper: pgHelper,
                 caching: caching,
+                systemLogging: systemLogging,
                 cancellationToken: cancellationToken
             );
 

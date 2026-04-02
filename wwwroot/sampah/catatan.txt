@@ -733,3 +733,10 @@ dan dengan contoh json ini:
 
 
 cek file  dan   sebagai referensi
+
+-------------
+
+
+Bikinin log buat pembuktian hal berikut:
+- MaxParallelCount
+- Pake Chace atau gak buat config MAP & ACV
